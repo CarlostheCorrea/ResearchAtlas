@@ -1,0 +1,57 @@
+"""
+FastAPI app entry point — mounts all routers and serves the frontend.
+Phase 3 — Week 8: MCP Foundations. The main API coordinates agents and serves the UI.
+
+Run: uvicorn app.main:app --reload --port 8000
+"""
+import os
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+import app.database as db
+from api.routes_search import router as search_router
+from api.routes_chat import router as chat_router
+from api.routes_review import router as review_router
+from api.routes_library import router as library_router
+
+app = FastAPI(
+    title="ArXiv Research Assistant",
+    description="AI-powered research assistant with MCP, LangGraph, and multi-agent workflows",
+    version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup():
+    db.init_db()
+    os.makedirs("data/pdfs", exist_ok=True)
+    os.makedirs("data/vectorstore", exist_ok=True)
+    print("[main] Database initialized, data directories ready.")
+
+
+# Register API routers
+app.include_router(search_router)
+app.include_router(chat_router)
+app.include_router(review_router)
+app.include_router(library_router)
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "service": "arxiv-research-assistant"}
+
+
+# Serve frontend as static files at root
+# This must come AFTER API routes to avoid catching /api/* paths
+frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
+if os.path.isdir(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

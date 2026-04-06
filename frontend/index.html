@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArXiv Research Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Left sidebar: search + results -->
+  <aside id="sidebar">
+    <div id="app-header">
+      <span id="app-logo">&#9881;</span>
+      <h1 id="app-title">ResearchAtlas</h1>
+    </div>
+    <div id="search-bar">
+      <input type="text" id="search-input" placeholder="Search arXiv papers..." autocomplete="off" />
+      <div id="search-filters">
+        <input type="number" id="year-from" placeholder="From year" min="1990" max="2025" />
+        <input type="text" id="categories" placeholder="e.g. cs.CL, cs.AI" />
+      </div>
+      <button id="search-btn">
+        <span id="search-btn-text">Search</span>
+        <span id="search-spinner" class="spinner hidden"></span>
+      </button>
+    </div>
+    <div id="filter-report-bar"></div>
+    <div id="results-list"></div>
+    <div id="shortlist-section" class="hidden">
+      <h3>Shortlisted</h3>
+      <div id="shortlist-items"></div>
+    </div>
+  </aside>
+
+  <!-- Main panel: paper detail + summary + chat -->
+  <main id="main-panel">
+    <div id="empty-state">
+      <div id="empty-icon">&#128196;</div>
+      <h2>Search for papers to get started</h2>
+      <p>Use the search bar to find arXiv papers on any topic. Results are ranked by relevance, recency, and your preferences.</p>
+    </div>
+
+    <div id="paper-view" class="hidden">
+      <div id="paper-header"></div>
+      <div id="tab-bar">
+        <button class="tab active" data-tab="summary">Summary</button>
+        <button class="tab" data-tab="chat">Ask a Question</button>
+        <button class="tab" data-tab="library">My Library</button>
+        <button class="tab" data-tab="preferences">Preferences</button>
+      </div>
+      <div id="tab-content">
+        <div id="tab-summary" class="tab-pane active"></div>
+        <div id="tab-chat" class="tab-pane">
+          <div id="chat-messages"></div>
+          <div id="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Ask a question about this paper..." />
+            <button id="chat-send-btn">Send</button>
+          </div>
+        </div>
+        <div id="tab-library" class="tab-pane"></div>
+        <div id="tab-preferences" class="tab-pane"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Approval modal (shown during interrupt() pause points) -->
+  <div id="approval-modal" class="modal hidden">
+    <div id="modal-content">
+      <div id="modal-title"></div>
+      <div id="modal-body"></div>
+      <div id="modal-actions">
+        <button id="btn-approve" class="btn-primary">Approve &amp; Save</button>
+        <button id="btn-reject" class="btn-ghost">Reject</button>
+        <button id="btn-revise" class="btn-amber">Request Revision</button>
+        <textarea id="revision-input" placeholder="Describe your requested changes..." class="hidden"></textarea>
+        <button id="btn-submit-revision" class="btn-primary hidden">Submit Revision</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status bar at bottom -->
+  <div id="status-bar">
+    <span id="status-indicator" class="dot dot-idle"></span>
+    <span id="status-text">Ready</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
