@@ -30,6 +30,9 @@ env/
 .AppleDouble
 .LSOverride
 
+# ── Claude Code local config ──────────────────────────────────────────────────
+.claude/
+
 # ── IDE / editors ─────────────────────────────────────────────────────────────
 .vscode/settings.json
 .idea/

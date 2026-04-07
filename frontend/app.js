@@ -6,6 +6,19 @@
 const DEBUG = false;
 function debug(...args) { if (DEBUG) console.log('[ResearchAtlas]', ...args); }
 
+// ── Theme ──────────────────────────────────────────────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('ra-theme') || 'light';
+  document.documentElement.dataset.theme = saved;
+}
+
+function toggleTheme() {
+  const current = document.documentElement.dataset.theme || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('ra-theme', next);
+}
+
 // ── State ──────────────────────────────────────────────────────────────────────
 const state = {
   currentSession: null,
@@ -859,6 +872,12 @@ function sleep(ms) {
 
 // ── Event wiring ───────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Apply saved theme before anything renders
+  initTheme();
+
+  // Theme toggle button
+  document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
+
   // Bootstrap: load library immediately for landing page + search indicators
   initApp();
 

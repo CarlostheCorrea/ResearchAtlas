@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ArXiv Research Assistant</title>
+  <title>ResearchAtlas</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,8 +14,20 @@
   <!-- Left sidebar: search + results -->
   <aside id="sidebar">
     <div id="app-header">
-      <span id="app-logo">&#9881;</span>
-      <h1 id="app-title">ResearchAtlas</h1>
+      <div class="app-header-left">
+        <span id="app-logo">&#9881;</span>
+        <div>
+          <h1 id="app-title">ResearchAtlas</h1>
+          <p class="app-sub">arXiv · Research Assistant</p>
+        </div>
+      </div>
+      <button class="theme-toggle" id="theme-toggle-btn" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <span class="toggle-icon toggle-icon-sun">&#9728;</span>
+        <span class="toggle-track">
+          <span class="toggle-thumb"></span>
+        </span>
+        <span class="toggle-icon toggle-icon-moon">&#9790;</span>
+      </button>
     </div>
     <div id="search-bar">
       <input type="text" id="search-input" placeholder="Search arXiv papers..." autocomplete="off" />
