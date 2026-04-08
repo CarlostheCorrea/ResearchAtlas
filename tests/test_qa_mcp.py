@@ -1,0 +1,294 @@
+"""
+Focused tests for the Q/A MCP server and its core tools.
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from pydantic import AnyUrl, TypeAdapter
+
+ROOT = Path(__file__).resolve().parents[1]
+_URL = TypeAdapter(AnyUrl)
+
+
+class TestQATools:
+    def test_find_evidence_formats_quote_level_results(self, monkeypatch, tmp_path):
+        env = os.environ.copy()
+        env["DB_PATH"] = str(tmp_path / "research.db")
+        env["PDF_DIR"] = str(tmp_path / "pdfs")
+        env["VECTORSTORE_DIR"] = str(tmp_path / "vectorstore")
+        env["QA_ASSETS_DIR"] = str(tmp_path / "qa_assets")
+
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(
+            mcp_server,
+            "retrieve_paper_chunks",
+            lambda arxiv_id, question, k=5: [
+                {
+                    "text": "The model improves accuracy by 12 percent over the baseline on the benchmark dataset.",
+                    "section": "Results",
+                    "page": 7,
+                    "arxiv_id": arxiv_id,
+                },
+                {
+                    "text": "A second supporting excerpt appears in the discussion section.",
+                    "section": "Discussion",
+                    "page": 9,
+                    "arxiv_id": arxiv_id,
+                },
+            ],
+        )
+
+        result = json.loads(mcp_server.find_evidence("1234.5678", "What evidence supports the main claim?", 2))
+        assert result["arxiv_id"] == "1234.5678"
+        assert len(result["evidence"]) == 2
+        assert result["evidence"][0]["page"] == 7
+        assert result["evidence"][0]["section"] == "Results"
+        assert "accuracy" in result["evidence"][0]["quote"].lower()
+
+    def test_export_tools_write_files(self, tmp_path, monkeypatch):
+        from app.qa import mcp_server
+        from app.qa import assets as qa_assets
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        citations = json.dumps([{"section": "Results", "page": 7, "quote": "Improves accuracy by 12 percent."}])
+        md_asset = json.loads(
+            mcp_server.create_md("sess-1", "Test Answer", "What happened?", "It improved.", citations)
+        )
+        pdf_asset = json.loads(
+            mcp_server.create_pdf("sess-1", "Test Answer", "What happened?", "It improved.", citations)
+        )
+
+        assert Path(md_asset["path"]).exists()
+        assert md_asset["filename"] == "test-answer-qa-response.md"
+        assert Path(md_asset["path"]).read_text(encoding="utf-8").startswith("# Test Answer")
+        assert Path(pdf_asset["path"]).exists()
+        assert pdf_asset["filename"] == "test-answer-qa-response.pdf"
+        assert Path(pdf_asset["path"]).stat().st_size > 0
+
+    def test_export_tools_do_not_include_question_answer_scaffolding(self, tmp_path, monkeypatch):
+        import fitz
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        md_asset = json.loads(
+            mcp_server.create_md("sess-2", "Clean Export", "Question text", "Only the answer body.", "[]")
+        )
+        pdf_asset = json.loads(
+            mcp_server.create_pdf("sess-2", "Clean Export", "Question text", "Only the answer body.", "[]")
+        )
+
+        md_text = Path(md_asset["path"]).read_text(encoding="utf-8")
+        assert "## Question" not in md_text
+        assert "## Answer" not in md_text
+        assert "## Response" in md_text
+
+        pdf_text = fitz.open(pdf_asset["path"])[0].get_text()
+        assert "Question " not in pdf_text
+        assert "Answer " not in pdf_text
+
+    def test_markdown_export_uses_relevant_filename_and_headers(self, tmp_path, monkeypatch):
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        asset = json.loads(
+            mcp_server.create_md(
+                "sess-headers",
+                "Experimental Search for Quantum Gravity",
+                "Create a well formatted markdown summary with headers.",
+                "This is the body.",
+                "[]",
+            )
+        )
+
+        text = Path(asset["path"]).read_text(encoding="utf-8")
+        assert asset["filename"] == "experimental-search-for-quantum-gravity-summary.md"
+        assert "# Experimental Search for Quantum Gravity" in text
+        assert "## Summary" in text
+
+    def test_create_graphic_uses_minimal_openai_request(self, tmp_path, monkeypatch):
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        captured = {}
+
+        class _Image:
+            b64_json = base64.b64encode(b"png-bytes").decode("utf-8")
+            revised_prompt = "revised"
+            url = None
+
+        class _Response:
+            data = [_Image()]
+
+        def fake_generate(**kwargs):
+            captured.update(kwargs)
+            return _Response()
+
+        monkeypatch.setattr(mcp_server.client.images, "generate", fake_generate)
+        asset = json.loads(mcp_server.create_graphic("sess-3", "draw a workflow", "Graphic"))
+
+        assert Path(asset["path"]).exists()
+        assert captured == {
+            "model": mcp_server.OPENAI_IMAGE_MODEL,
+            "prompt": "draw a workflow",
+            "size": "1024x1024",
+        }
+
+
+class TestQAOrchestratorHelpers:
+    def test_requested_download_tools_respect_requested_format(self):
+        from app.qa.orchestrator import _requested_download_tools
+
+        assert _requested_download_tools("Write this as a MD file download.") == ["create_md"]
+        assert _requested_download_tools("Export this answer as PDF.") == ["create_pdf"]
+        assert _requested_download_tools("Make this downloadable.") == ["create_md"]
+        assert _requested_download_tools("Give me both markdown and pdf.") == ["create_md", "create_pdf"]
+
+    def test_needs_evidence_only_for_evidence_requests(self):
+        from app.qa.orchestrator import _needs_evidence
+
+        assert _needs_evidence("What evidence supports the main claim?") is True
+        assert _needs_evidence("Give me a 2 sentence summary.") is False
+
+    def test_planner_tool_catalog_excludes_asset_tools(self):
+        from app.qa.orchestrator import _planner_tool_catalog
+
+        catalog = [
+            {"name": "retrieve_paper_chunks", "description": "retrieve", "input_schema": {}},
+            {"name": "create_md", "description": "md", "input_schema": {}},
+            {"name": "create_pdf", "description": "pdf", "input_schema": {}},
+            {"name": "create_graphic", "description": "graphic", "input_schema": {}},
+            {"name": "find_evidence", "description": "evidence", "input_schema": {}},
+        ]
+
+        planned = _planner_tool_catalog(catalog)
+        assert [tool["name"] for tool in planned] == ["retrieve_paper_chunks", "find_evidence"]
+
+    def test_tool_error_message_prefers_explicit_error_fields(self):
+        from app.qa.orchestrator import _tool_error_message
+
+        class _Raw:
+            isError = True
+
+        assert _tool_error_message(_Raw(), {"error": "bad request"}) == "bad request"
+        assert _tool_error_message(_Raw(), {"text": "tool failed"}) == "tool failed"
+
+
+class TestQAMcpHostDecoding:
+    def test_decode_tool_result_unwraps_fastmcp_result_wrapper(self):
+        from app.qa.mcp_host import decode_tool_result
+
+        class _Text:
+            type = "text"
+
+            def __init__(self, text):
+                self.text = text
+
+        class _Result:
+            def __init__(self):
+                self.structuredContent = {
+                    "result": json.dumps({
+                        "kind": "markdown",
+                        "label": "Download Markdown",
+                        "url": "/qa-assets/sess1/answer.md",
+                    })
+                }
+                self.content = [_Text(self.structuredContent["result"])]
+
+        decoded = decode_tool_result(_Result())
+        assert decoded["kind"] == "markdown"
+        assert decoded["url"] == "/qa-assets/sess1/answer.md"
+
+
+class TestQAMcpServerStdio:
+    def test_stdio_server_lists_tools_and_creates_markdown(self, tmp_path):
+        self._seed_metadata(tmp_path)
+        asyncio.run(self._exercise_stdio(tmp_path))
+
+    def _seed_metadata(self, tmp_path: Path) -> None:
+        env = os.environ.copy()
+        env.update({
+            "DB_PATH": str(tmp_path / "research.db"),
+            "PDF_DIR": str(tmp_path / "pdfs"),
+            "VECTORSTORE_DIR": str(tmp_path / "vectorstore"),
+            "QA_ASSETS_DIR": str(tmp_path / "qa_assets"),
+        })
+
+        seed_script = """
+import app.database as db
+db.init_db()
+db.cache_paper_metadata({
+    "arxiv_id": "1706.03762",
+    "title": "Attention Is All You Need",
+    "authors": ["Ashish Vaswani"],
+    "abstract": "Cached abstract for stdio MCP test.",
+    "published": "2017-06-12",
+    "pdf_url": "https://arxiv.org/pdf/1706.03762",
+    "categories": ["cs.CL"],
+})
+"""
+        subprocess.run([sys.executable, "-c", seed_script], cwd=ROOT, env=env, check=True)
+
+    async def _exercise_stdio(self, tmp_path: Path) -> None:
+        from mcp import ClientSession
+        from mcp.client.stdio import StdioServerParameters, stdio_client
+
+        env = os.environ.copy()
+        env.update({
+            "DB_PATH": str(tmp_path / "research.db"),
+            "PDF_DIR": str(tmp_path / "pdfs"),
+            "VECTORSTORE_DIR": str(tmp_path / "vectorstore"),
+            "QA_ASSETS_DIR": str(tmp_path / "qa_assets"),
+        })
+
+        params = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "app.qa.mcp_server"],
+            cwd=ROOT,
+            env=env,
+        )
+
+        async with stdio_client(params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+
+                tools_result = await session.list_tools()
+                tool_names = {tool.name for tool in tools_result.tools}
+                assert {"find_evidence", "create_md", "create_pdf", "create_graphic", "compare_sections", "cite_evidence"}.issubset(tool_names)
+
+                templates = await session.list_resource_templates()
+                template_names = {tpl.uriTemplate for tpl in templates.resourceTemplates}
+                assert "researchatlas://paper/{arxiv_id}/metadata" in template_names
+
+                metadata = await session.read_resource(
+                    _URL.validate_python("researchatlas://paper/1706.03762/metadata")
+                )
+                payload = json.loads(metadata.contents[0].text)
+                assert payload["title"] == "Attention Is All You Need"
+
+                created = await session.call_tool(
+                    "create_md",
+                    {
+                        "session_id": "qa-stdio",
+                        "title": "Downloadable Answer",
+                        "question": "What is the contribution?",
+                        "answer": "A transformer architecture.",
+                        "citations_json": "[]",
+                    },
+                )
+                text_payload = json.loads(created.content[0].text)
+                assert Path(text_payload["path"]).exists()

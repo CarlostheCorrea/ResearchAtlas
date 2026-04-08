@@ -12,8 +12,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import app.database as db
 from api.routes_search import router as search_router
 from api.routes_chat import router as chat_router
+from api.routes_qa import router as qa_router
 from api.routes_review import router as review_router
 from api.routes_library import router as library_router
+from app.config import PDF_DIR, QA_ASSETS_DIR, VECTORSTORE_DIR
+from app.qa.assets import purge_old_assets
 
 app = FastAPI(
     title="ArXiv Research Assistant",
@@ -33,14 +36,17 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     db.init_db()
-    os.makedirs("data/pdfs", exist_ok=True)
-    os.makedirs("data/vectorstore", exist_ok=True)
+    os.makedirs(PDF_DIR, exist_ok=True)
+    os.makedirs(VECTORSTORE_DIR, exist_ok=True)
+    os.makedirs(QA_ASSETS_DIR, exist_ok=True)
+    purge_old_assets()
     print("[main] Database initialized, data directories ready.")
 
 
 # Register API routers
 app.include_router(search_router)
 app.include_router(chat_router)
+app.include_router(qa_router)
 app.include_router(review_router)
 app.include_router(library_router)
 
@@ -53,5 +59,9 @@ def health():
 # Serve frontend as static files at root
 # This must come AFTER API routes to avoid catching /api/* paths
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
+os.makedirs(QA_ASSETS_DIR, exist_ok=True)
+os.makedirs(PDF_DIR, exist_ok=True)
+app.mount("/qa-assets", StaticFiles(directory=QA_ASSETS_DIR), name="qa-assets")
+app.mount("/paper-pdfs", StaticFiles(directory=PDF_DIR), name="paper-pdfs")
 if os.path.isdir(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

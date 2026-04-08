@@ -29,6 +29,13 @@ const state = {
   libraryIds: new Set(), // fast O(1) lookup for "is this paper saved?"
   pollingInterval: null,
   pendingInterrupt: null,
+  currentQaResult: null,
+  currentQaPoll: null,
+  availableQaTools: [],
+  pdfDoc: null,
+  pdfUrl: null,
+  pdfCurrentPage: 1,
+  pdfEvidenceIndex: null,
 };
 
 // ── API helpers ────────────────────────────────────────────────────────────────
@@ -150,6 +157,7 @@ function openSavedPaper(savedPaper) {
     document.getElementById('tab-summary').innerHTML =
       '<div style="padding:16px;color:var(--text-muted);font-size:13px;">Summary not available. Click "Analyze Paper" to generate one.</div>';
   }
+  resetQaWorkspace();
 }
 
 // ── Search flow ────────────────────────────────────────────────────────────────
@@ -277,7 +285,7 @@ async function selectPaper(rankedPaper) {
   switchTab('summary');
   document.getElementById('tab-summary').innerHTML =
     '<div style="color:var(--text-muted);padding:16px;font-size:13px;">Click "Analyze Paper" to generate a summary, or ask a question below.</div>';
-  document.getElementById('chat-messages').innerHTML = '';
+  resetQaWorkspace();
   // Stop any in-flight polling from a previous paper
   if (state.pollingInterval) {
     clearInterval(state.pollingInterval);
@@ -560,14 +568,17 @@ async function submitReview(decision, revisionNote = '') {
 async function sendQuestion(question) {
   if (!state.currentPaper || !question.trim()) return;
 
+  resetPdfViewer();
   renderChatMessage('user', question);
   const typingEl = addTypingIndicator();
 
   const session_id = generateId();
   state.currentSession = session_id;
+  state.currentQaResult = null;
+  updateStatusBar('Running MCP Q/A...', 'running');
 
   try {
-    const result = await apiPost('/api/chat', {
+    const result = await apiPost('/api/qa', {
       message: question,
       arxiv_id: state.currentPaper.arxiv_id,
       session_id,
@@ -575,34 +586,53 @@ async function sendQuestion(question) {
 
     // Poll for answer
     const pollForAnswer = async () => {
-      for (let i = 0; i < 30; i++) {
-        await sleep(1500);
-        const status = await apiGet(`/api/chat/status/${result.session_id}`);
+      for (let i = 0; i < 60; i++) {
+        await sleep(1200);
+        const status = await apiGet(`/api/qa/status/${result.session_id}`);
+        renderToolTimeline(status.tool_timeline || []);
         if (status.status === 'completed') {
           typingEl.remove();
-          renderChatMessage('assistant', status.final_answer || 'No answer returned.', []);
-          return;
-        }
-        if (status.status === 'interrupted') {
-          typingEl.remove();
-          state.pendingInterrupt = status;
-          showApprovalModal(status.interrupt_payload || {});
+          state.currentQaResult = status;
+          if (status.chat_message) {
+            renderChatMessage('assistant', status.chat_message, status.answer_citations || []);
+          }
+          renderQaArtifacts(status);
+          updateStatusBar('Q/A complete', 'ok');
           return;
         }
         if (status.status === 'error') {
           typingEl.remove();
           renderChatMessage('assistant', `Error: ${status.error}`, []);
+          updateStatusBar('Q/A failed', 'error');
           return;
         }
       }
       typingEl.remove();
       renderChatMessage('assistant', 'Request timed out. Please try again.', []);
+      updateStatusBar('Q/A timed out', 'error');
     };
 
     pollForAnswer();
   } catch (err) {
     typingEl.remove();
     renderChatMessage('assistant', `Error: ${err.message}`, []);
+    updateStatusBar('Q/A failed', 'error');
+  }
+}
+
+async function loadQaTools(force = false) {
+  if (!force && state.availableQaTools.length > 0) {
+    renderAvailableTools(state.availableQaTools);
+    return;
+  }
+  try {
+    const result = await apiGet('/api/qa/tools');
+    state.availableQaTools = result.tools || [];
+    renderAvailableTools(state.availableQaTools);
+  } catch (err) {
+    const container = document.getElementById('qa-available-tools');
+    container.innerHTML = 'Could not load the MCP tool list.';
+    container.classList.add('qa-empty');
   }
 }
 
@@ -611,14 +641,21 @@ function renderChatMessage(role, content, citations = []) {
   const el = document.createElement('div');
   el.className = `chat-message ${role}`;
   el.innerHTML = `
-    <div>${escHtml(content)}</div>
+    <div class="chat-message-body">${escHtml(content)}</div>
     ${citations.length > 0 ? `
       <div class="chat-citations">
-        ${citations.map(c => `<span class="citation-badge">[${escHtml(c)}]</span>`).join('')}
+        ${citations.map((c, idx) => `
+          <span class="citation-badge" data-evidence-index="${idx}">
+            [${escHtml(c.section || 'Section')}, p.${escHtml(c.page || '?')}]
+          </span>
+        `).join('')}
       </div>
     ` : ''}
   `;
   messages.appendChild(el);
+  el.querySelectorAll('[data-evidence-index]').forEach(btn => {
+    btn.addEventListener('click', () => openEvidenceItem(parseInt(btn.dataset.evidenceIndex, 10)));
+  });
   messages.scrollTop = messages.scrollHeight;
   return el;
 }
@@ -631,6 +668,224 @@ function addTypingIndicator() {
   messages.appendChild(el);
   messages.scrollTop = messages.scrollHeight;
   return el;
+}
+
+function resetQaWorkspace() {
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('qa-available-tools').innerHTML = 'Loading MCP tool list...';
+  document.getElementById('qa-available-tools').classList.add('qa-empty');
+  document.getElementById('qa-tool-timeline').innerHTML = 'Ask a question to see MCP tool usage.';
+  document.getElementById('qa-tool-timeline').classList.add('qa-empty');
+  document.getElementById('qa-assets').innerHTML = 'Generated Markdown and PDF downloads will appear here.';
+  document.getElementById('qa-assets').classList.add('qa-empty');
+  document.getElementById('qa-evidence-list').innerHTML = 'Evidence quotes and PDF highlights will appear here.';
+  document.getElementById('qa-evidence-list').classList.add('qa-empty');
+  document.getElementById('qa-graphic').innerHTML = '';
+  document.getElementById('qa-graphic-panel').classList.add('hidden');
+  document.getElementById('qa-evidence-panel').classList.add('hidden');
+  state.currentQaResult = null;
+  resetPdfViewer();
+  loadQaTools();
+}
+
+function renderToolTimeline(timeline) {
+  const container = document.getElementById('qa-tool-timeline');
+  if (!timeline || timeline.length === 0) {
+    container.innerHTML = 'Ask a question to see MCP tool usage.';
+    container.classList.add('qa-empty');
+    return;
+  }
+  container.classList.remove('qa-empty');
+  container.innerHTML = timeline.map(step => `
+    <div class="qa-tool-step">
+      <div class="qa-tool-step-title">${escHtml(step.title || step.tool || 'Tool')}</div>
+      <div class="qa-tool-step-meta">${escHtml(step.details || '')}</div>
+    </div>
+  `).join('');
+}
+
+function renderQaArtifacts(result) {
+  renderAvailableTools(result.available_tools || []);
+  renderToolTimeline(result.tool_timeline || []);
+  renderQaAssets(result.assets || []);
+  renderGeneratedGraphic(result.generated_image);
+  renderEvidenceBundle(result.evidence_bundle || { items: [] });
+}
+
+function renderAvailableTools(tools) {
+  const container = document.getElementById('qa-available-tools');
+  if (!tools || tools.length === 0) {
+    container.innerHTML = 'Ask a question to load the MCP tool list.';
+    container.classList.add('qa-empty');
+    return;
+  }
+  container.classList.remove('qa-empty');
+  container.innerHTML = tools.map(tool => `
+    <div class="qa-tool-card">
+      <div class="qa-tool-step-title">${escHtml(tool.name || 'tool')}</div>
+      <div class="qa-tool-step-meta">${escHtml(tool.description || '')}</div>
+    </div>
+  `).join('');
+}
+
+function renderQaAssets(assets) {
+  const container = document.getElementById('qa-assets');
+  const downloads = (assets || []).filter(a => a.kind === 'markdown' || a.kind === 'pdf');
+  if (downloads.length === 0) {
+    container.innerHTML = 'Generated Markdown and PDF downloads will appear here.';
+    container.classList.add('qa-empty');
+    return;
+  }
+  container.classList.remove('qa-empty');
+  container.innerHTML = downloads.map(asset => `
+    <div class="qa-asset-card">
+      <div>
+        <div class="qa-tool-step-title">${escHtml(asset.label || asset.filename)}</div>
+        <div class="qa-tool-step-meta">${escHtml(asset.filename || '')}</div>
+      </div>
+      <a class="btn-ghost" href="${asset.url}" download>Download</a>
+    </div>
+  `).join('');
+}
+
+function renderGeneratedGraphic(asset) {
+  const panel = document.getElementById('qa-graphic-panel');
+  const container = document.getElementById('qa-graphic');
+  if (!asset || !asset.url) {
+    panel.classList.add('hidden');
+    container.innerHTML = '';
+    return;
+  }
+  panel.classList.remove('hidden');
+  container.innerHTML = `
+    <img src="${asset.url}" alt="${escHtml(asset.label || 'Generated graphic')}" />
+    ${asset.revised_prompt ? `<div class="qa-graphic-caption">${escHtml(asset.revised_prompt)}</div>` : ''}
+  `;
+}
+
+function renderEvidenceBundle(bundle) {
+  const panel = document.getElementById('qa-evidence-panel');
+  const container = document.getElementById('qa-evidence-list');
+  const items = bundle?.items || [];
+  if (!bundle?.enabled || items.length === 0) {
+    panel.classList.add('hidden');
+    container.innerHTML = 'Evidence quotes and PDF highlights will appear here.';
+    container.classList.add('qa-empty');
+    resetPdfViewer();
+    return;
+  }
+  panel.classList.remove('hidden');
+  container.classList.remove('qa-empty');
+  container.innerHTML = items.map((item, idx) => `
+    <div class="qa-evidence-item" data-evidence-index="${idx}">
+      <div class="qa-evidence-meta">${escHtml(item.section || 'Unknown')} · page ${escHtml(item.page || '?')}</div>
+      <div class="qa-evidence-quote">${escHtml(item.quote || '')}</div>
+    </div>
+  `).join('');
+  container.querySelectorAll('[data-evidence-index]').forEach(el => {
+    el.addEventListener('click', () => openEvidenceItem(parseInt(el.dataset.evidenceIndex, 10)));
+  });
+  openEvidenceItem(0);
+}
+
+function resetPdfViewer() {
+  state.pdfDoc = null;
+  state.pdfUrl = null;
+  state.pdfCurrentPage = 1;
+  state.pdfEvidenceIndex = null;
+  const canvas = document.getElementById('qa-pdf-canvas');
+  const textLayer = document.getElementById('qa-pdf-text-layer');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width || 1, canvas.height || 1);
+  }
+  if (textLayer) textLayer.innerHTML = '';
+  document.getElementById('qa-page-indicator').textContent = 'Page 0 / 0';
+}
+
+async function ensurePdfDocument(url) {
+  if (!window.pdfjsLib) throw new Error('PDF viewer dependency is unavailable.');
+  if (state.pdfDoc && state.pdfUrl === url) return state.pdfDoc;
+  state.pdfUrl = url;
+  state.pdfDoc = await window.pdfjsLib.getDocument(url).promise;
+  return state.pdfDoc;
+}
+
+function normalizeText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function applyPdfHighlights(matchText) {
+  const spans = Array.from(document.querySelectorAll('#qa-pdf-text-layer span'));
+  spans.forEach(span => span.classList.remove('qa-text-highlight'));
+  const target = normalizeText(matchText);
+  if (!target) return;
+  const targetTokens = new Set(target.split(' ').filter(t => t.length > 2));
+  const ranked = spans.map(span => {
+    const text = normalizeText(span.textContent);
+    if (!text) return { span, score: 0 };
+    const spanTokens = new Set(text.split(' ').filter(t => t.length > 2));
+    const overlap = [...targetTokens].filter(token => spanTokens.has(token)).length;
+    const exact = target.includes(text) || text.includes(target);
+    return { span, score: exact ? overlap + 5 : overlap };
+  }).filter(item => item.score >= 2).sort((a, b) => b.score - a.score);
+
+  ranked.slice(0, 10).forEach(item => item.span.classList.add('qa-text-highlight'));
+}
+
+async function renderPdfPage(pageNumber, evidenceItem = null) {
+  if (!state.pdfDoc) return;
+  const page = await state.pdfDoc.getPage(pageNumber);
+  const viewport = page.getViewport({ scale: 1.2 });
+  const canvas = document.getElementById('qa-pdf-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  const textLayer = document.getElementById('qa-pdf-text-layer');
+  textLayer.innerHTML = '';
+  textLayer.style.width = `${viewport.width}px`;
+  textLayer.style.height = `${viewport.height}px`;
+  textLayer.style.left = `${canvas.offsetLeft}px`;
+  textLayer.style.top = `${canvas.offsetTop}px`;
+
+  const textContent = await page.getTextContent();
+  await window.pdfjsLib.renderTextLayer({
+    textContentSource: textContent,
+    container: textLayer,
+    viewport,
+    textDivs: [],
+  }).promise;
+
+  document.getElementById('qa-page-indicator').textContent = `Page ${pageNumber} / ${state.pdfDoc.numPages}`;
+  applyPdfHighlights(evidenceItem?.match_text || evidenceItem?.quote || '');
+}
+
+async function openEvidenceItem(index) {
+  const bundle = state.currentQaResult?.evidence_bundle;
+  const items = bundle?.items || [];
+  if (!items[index]) return;
+
+  state.pdfEvidenceIndex = index;
+  document.querySelectorAll('.qa-evidence-item, .citation-badge').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll(`[data-evidence-index="${index}"]`).forEach(el => el.classList.add('active'));
+
+  const item = items[index];
+  const pdfUrl = bundle?.pdf_url;
+  if (!pdfUrl) return;
+  try {
+    const doc = await ensurePdfDocument(pdfUrl);
+    const pageNumber = Math.max(1, Math.min(item.page || 1, doc.numPages));
+    state.pdfCurrentPage = pageNumber;
+    await renderPdfPage(pageNumber, item);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
 
 // ── Library ────────────────────────────────────────────────────────────────────
@@ -845,6 +1100,7 @@ function switchTab(tabName) {
 
   if (tabName === 'library') loadLibrary();
   if (tabName === 'preferences') loadPreferences();
+  if (tabName === 'chat') loadQaTools();
 }
 
 function escHtml(str) {
@@ -908,6 +1164,19 @@ document.addEventListener('DOMContentLoaded', () => {
       input.value = '';
       sendQuestion(q);
     }
+  });
+
+  document.getElementById('qa-prev-page').addEventListener('click', async () => {
+    if (!state.pdfDoc || state.pdfCurrentPage <= 1) return;
+    state.pdfCurrentPage -= 1;
+    const evidence = state.currentQaResult?.evidence_bundle?.items?.[state.pdfEvidenceIndex] || null;
+    await renderPdfPage(state.pdfCurrentPage, evidence);
+  });
+  document.getElementById('qa-next-page').addEventListener('click', async () => {
+    if (!state.pdfDoc || state.pdfCurrentPage >= state.pdfDoc.numPages) return;
+    state.pdfCurrentPage += 1;
+    const evidence = state.currentQaResult?.evidence_bundle?.items?.[state.pdfEvidenceIndex] || null;
+    await renderPdfPage(state.pdfCurrentPage, evidence);
   });
 
   // Approval modal buttons

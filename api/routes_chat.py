@@ -1,5 +1,5 @@
 """
-Chat API routes — triggers Q&A or analysis flows.
+Analysis API routes — triggers the summary/analyze flow and review checkpoints.
 Phase 3 — Week 11: Human-in-the-Loop. Interrupt handling and session polling.
 """
 import uuid
@@ -8,6 +8,7 @@ from fastapi import APIRouter, BackgroundTasks
 from app.schemas import ChatRequest
 from app.graph.build_graph import get_graph
 import app.database as db
+from app.rag.vectorstore import is_collection_compatible
 
 router = APIRouter()
 
@@ -82,23 +83,19 @@ def _run_graph_background(session_id: str, initial_state: dict, config: dict):
 @router.post("/api/chat")
 async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     """
-    Trigger Q&A flow or analysis flow.
-    If paper not yet indexed: graph will interrupt() before download for approval.
-    If paper indexed: runs retrieval → QA immediately.
+    Trigger the summary/analyze flow.
+    Q/A now runs through a dedicated MCP-backed route.
     """
     session_id = request.session_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": session_id}}
 
-    paper_indexed = db.is_paper_indexed(request.arxiv_id) if request.arxiv_id else False
+    paper_indexed = (
+        db.is_paper_indexed(request.arxiv_id) and is_collection_compatible(request.arxiv_id)
+        if request.arxiv_id else False
+    )
     message_lower = (request.message or "").strip().lower()
 
-    # "analyze" / "analyse" always means summary flow — never route to Q&A for this.
-    # Q&A intent is only used when the user typed an actual question.
-    if request.arxiv_id and message_lower in ("analyze", "analyse"):
-        intent = "analyze_paper"
-    elif request.arxiv_id and paper_indexed and message_lower not in ("analyze", "analyse", "save"):
-        intent = "ask_question"
-    elif request.arxiv_id:
+    if request.arxiv_id:
         intent = "analyze_paper"
     else:
         intent = "discover"
@@ -106,7 +103,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     initial_state = {
         "session_id": session_id,
         "user_query": request.message,
-        "question": request.message if intent == "ask_question" else None,
+        "question": None,
         "selected_arxiv_id": request.arxiv_id,
         "intent": intent,
         "paper_indexed": paper_indexed,

@@ -58,7 +58,13 @@ class SearchRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     arxiv_id: Optional[str] = None  # if set, Q&A mode on this paper
-    session_id: str
+    session_id: Optional[str] = None
+
+
+class QARequest(BaseModel):
+    message: str
+    arxiv_id: str
+    session_id: Optional[str] = None
 
 
 class ReviewDecision(BaseModel):

@@ -5,9 +5,32 @@ Phase 3 — Week 9: MCP Server. Persistent vector store for semantic search.
 import os
 import shutil
 import chromadb
-from app.config import VECTORSTORE_DIR
+from chromadb.config import Settings
+from app.config import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, VECTORSTORE_DIR
 
 _client = None  # module-level singleton
+
+
+def expected_collection_metadata() -> dict:
+    metadata = {
+        "hnsw:space": "cosine",
+        "embedding_provider": "openai",
+        "embedding_model": EMBEDDING_MODEL,
+    }
+    if EMBEDDING_DIMENSIONS is not None:
+        metadata["embedding_dimensions"] = EMBEDDING_DIMENSIONS
+    return metadata
+
+
+def _apply_collection_metadata(collection) -> None:
+    current = dict(getattr(collection, "metadata", None) or {})
+    desired = expected_collection_metadata()
+    merged = {**current, **desired}
+    if merged != current:
+        try:
+            collection.modify(metadata=merged)
+        except Exception:
+            pass
 
 
 def get_chroma_client() -> chromadb.PersistentClient:
@@ -15,7 +38,14 @@ def get_chroma_client() -> chromadb.PersistentClient:
     global _client
     if _client is None:
         os.makedirs(VECTORSTORE_DIR, exist_ok=True)
-        _client = chromadb.PersistentClient(path=VECTORSTORE_DIR)
+        _client = chromadb.PersistentClient(
+            path=VECTORSTORE_DIR,
+            settings=Settings(
+                anonymized_telemetry=False,
+                chroma_product_telemetry_impl="app.rag.chroma_telemetry.NoOpTelemetry",
+                chroma_telemetry_impl="app.rag.chroma_telemetry.NoOpTelemetry",
+            ),
+        )
     return _client
 
 
@@ -28,10 +58,28 @@ def _reset_client():
 def get_or_create_collection(arxiv_id: str):
     """Get or create the ChromaDB collection for a paper."""
     client = get_chroma_client()
-    return client.get_or_create_collection(
+    collection = client.get_or_create_collection(
         name=f"paper_{arxiv_id}",
-        metadata={"hnsw:space": "cosine"},
+        metadata=expected_collection_metadata(),
     )
+    _apply_collection_metadata(collection)
+    return collection
+
+
+def is_collection_compatible(arxiv_id: str) -> bool:
+    """Return True when the stored collection metadata matches the active embedding setup."""
+    client = get_chroma_client()
+    try:
+        collection = client.get_collection(f"paper_{arxiv_id}")
+    except Exception:
+        return False
+
+    metadata = dict(getattr(collection, "metadata", None) or {})
+    desired = expected_collection_metadata()
+    for key, value in desired.items():
+        if metadata.get(key) != value:
+            return False
+    return True
 
 
 def index_chunks(arxiv_id: str, chunks: list[dict], embeddings: list[list[float]]) -> int:
@@ -66,6 +114,9 @@ def query_collection(arxiv_id: str, query_embedding: list[float], k: int = 5) ->
     Query the collection for the top-k most similar chunks.
     Returns list of dicts with text, metadata, and distance.
     """
+    if not query_embedding or not is_collection_compatible(arxiv_id):
+        return []
+
     collection = get_or_create_collection(arxiv_id)
     count = collection.count()
     if count == 0:

@@ -1,35 +1,39 @@
 """
-sentence-transformers embedding wrapper.
-Phase 3 — Week 9: MCP Server. Uses all-MiniLM-L6-v2 (free, local, ~80MB).
-Model downloads once and is cached at ~/.cache/torch/ for subsequent runs.
+OpenAI embeddings wrapper.
+Phase 3 — Week 9: MCP Server. Uses the configured OpenAI embedding model.
 """
-from typing import Optional
-from app.config import EMBEDDING_MODEL
+from openai import OpenAI
 
-_model = None  # module-level singleton — load once, reuse across requests
+from app.config import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, OPENAI_API_KEY
+
+client = OpenAI(api_key=OPENAI_API_KEY, timeout=90.0)
 
 
-def get_embedding_model():
-    """Lazy-load the sentence transformer model (downloads ~80MB on first call)."""
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-        print(f"[embeddings] Loading model '{EMBEDDING_MODEL}' (may download ~80MB on first run)...")
-        _model = SentenceTransformer(EMBEDDING_MODEL)
-        print("[embeddings] Model loaded.")
-    return _model
+def _normalize_inputs(texts: list[str]) -> list[str]:
+    # OpenAI embeddings reject empty strings, so normalize blank items to a space.
+    return [text if (text or "").strip() else " " for text in texts]
 
 
 def embed_texts(texts: list[str], batch_size: int = 32) -> list[list[float]]:
     """Embed a list of strings. Returns a list of float vectors."""
-    model = get_embedding_model()
-    embeddings = model.encode(texts, batch_size=batch_size, show_progress_bar=False)
-    return embeddings.tolist()
+    if not texts:
+        return []
+
+    normalized = _normalize_inputs(texts)
+    embeddings: list[list[float]] = []
+    for start in range(0, len(normalized), batch_size):
+        batch = normalized[start:start + batch_size]
+        params = {"model": EMBEDDING_MODEL, "input": batch}
+        if EMBEDDING_DIMENSIONS is not None:
+            params["dimensions"] = EMBEDDING_DIMENSIONS
+
+        response = client.embeddings.create(**params)
+        embeddings.extend(item.embedding for item in sorted(response.data, key=lambda item: item.index))
+    return embeddings
 
 
 def embed_query(text: str) -> list[float]:
     """Embed a single query string."""
-    if not text:
-        # Return a zero vector matching all-MiniLM-L6-v2's output dimension (384)
-        return [0.0] * 384
+    if not text or not text.strip():
+        return []
     return embed_texts([text])[0]

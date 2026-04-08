@@ -3,15 +3,18 @@ RAG tools for the MCP server — chunk indexing and semantic retrieval.
 Phase 3 — Week 9: Custom MCP server. Agents call these instead of importing chromadb directly.
 """
 import app.database as db
-from app.rag.embeddings import embed_texts, embed_query
-from app.rag.vectorstore import get_or_create_collection, index_chunks, query_collection, collection_count
+from app.rag.embeddings import embed_texts
+from app.rag.vectorstore import collection_count, delete_collection, index_chunks, is_collection_compatible
 
 
 def index_paper(arxiv_id: str) -> dict:
     """Embed all chunks for a paper and store in ChromaDB. Skips if already indexed."""
-    if collection_count(arxiv_id) > 0:
+    if collection_count(arxiv_id) > 0 and is_collection_compatible(arxiv_id):
         existing = db.get_chunks_for_paper(arxiv_id)
         return {"arxiv_id": arxiv_id, "chunks_indexed": len(existing), "already_indexed": True}
+
+    if collection_count(arxiv_id) > 0 and not is_collection_compatible(arxiv_id):
+        delete_collection(arxiv_id)
 
     chunks = db.get_chunks_for_paper(arxiv_id)
     if not chunks:

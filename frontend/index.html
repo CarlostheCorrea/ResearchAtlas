@@ -32,7 +32,7 @@
     <div id="search-bar">
       <input type="text" id="search-input" placeholder="Search arXiv papers..." autocomplete="off" />
       <div id="search-filters">
-        <input type="number" id="year-from" placeholder="From year" min="1990" max="2025" />
+        <input type="number" id="year-from" placeholder="After year" min="1990" max="2025" />
         <input type="text" id="categories" placeholder="e.g. cs.CL, cs.AI" />
       </div>
       <button id="search-btn">
@@ -67,10 +67,47 @@
       <div id="tab-content">
         <div id="tab-summary" class="tab-pane active"></div>
         <div id="tab-chat" class="tab-pane">
-          <div id="chat-messages"></div>
-          <div id="chat-input-area">
-            <input type="text" id="chat-input" placeholder="Ask a question about this paper..." />
-            <button id="chat-send-btn">Send</button>
+          <div id="qa-layout">
+            <section id="qa-main">
+              <div id="chat-messages"></div>
+              <div id="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Ask a question about this paper..." />
+                <button id="chat-send-btn">Send</button>
+              </div>
+            </section>
+            <aside id="qa-side">
+              <div class="qa-panel">
+                <div class="qa-panel-title">Available Tools</div>
+                <div id="qa-available-tools" class="qa-empty">Ask a question to load the MCP tool list.</div>
+              </div>
+              <div class="qa-panel">
+                <div class="qa-panel-title">Tool Timeline</div>
+                <div id="qa-tool-timeline" class="qa-empty">Ask a question to see MCP tool usage.</div>
+              </div>
+              <div class="qa-panel">
+                <div class="qa-panel-title">Downloads</div>
+                <div id="qa-assets" class="qa-empty">Generated Markdown and PDF downloads will appear here.</div>
+              </div>
+              <div class="qa-panel hidden" id="qa-graphic-panel">
+                <div class="qa-panel-title">Generated Graphic</div>
+                <div id="qa-graphic"></div>
+              </div>
+              <div class="qa-panel hidden" id="qa-evidence-panel">
+                <div class="qa-panel-title">Evidence Viewer</div>
+                <div id="qa-evidence-list" class="qa-empty">Evidence quotes and PDF highlights will appear here.</div>
+                <div id="qa-pdf-viewer">
+                  <div id="qa-pdf-toolbar">
+                    <button id="qa-prev-page" class="btn-ghost" type="button">Prev</button>
+                    <span id="qa-page-indicator">Page 0 / 0</span>
+                    <button id="qa-next-page" class="btn-ghost" type="button">Next</button>
+                  </div>
+                  <div id="qa-pdf-stage">
+                    <canvas id="qa-pdf-canvas"></canvas>
+                    <div id="qa-pdf-text-layer"></div>
+                  </div>
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
         <div id="tab-library" class="tab-pane"></div>
@@ -100,6 +137,13 @@
     <span id="status-text">Ready</span>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
   <script src="app.js"></script>
 </body>
 </html>
