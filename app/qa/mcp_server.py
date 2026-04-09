@@ -152,6 +152,8 @@ def _export_filename(title: str, question: str, extension: str) -> str:
 
 def _markdown_heading(question: str) -> str:
     lowered = (question or "").lower()
+    if any(token in lowered for token in ("key findings", "main findings", "findings")):
+        return "Key Findings"
     if any(token in lowered for token in ("summary", "summarize", "overview")):
         return "Summary"
     if "workflow" in lowered:
@@ -161,37 +163,113 @@ def _markdown_heading(question: str) -> str:
     return "Response"
 
 
+def _extract_points(text: str) -> list[str]:
+    numbered_matches = re.findall(r"(?:^|\n)\s*(?:\d+[.)]|[-*•])\s+(.*?)(?=(?:\n\s*(?:\d+[.)]|[-*•])\s+)|\Z)", text or "", flags=re.S)
+    if numbered_matches:
+        return [re.sub(r"\s+", " ", item).strip() for item in numbered_matches if item.strip()]
+
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return [""]
+
+    intro_match = re.match(r"^(.*?:)\s+(.*)$", cleaned, flags=re.S)
+    if intro_match and any(token in intro_match.group(1).lower() for token in ("findings", "follows", "list")):
+        cleaned = intro_match.group(2).strip()
+
+    inline_numbered_matches = re.findall(r"(?:^|\s)\d+[.)]\s+(.*?)(?=(?:\s+\d+[.)]\s+)|\Z)", cleaned, flags=re.S)
+    if inline_numbered_matches:
+        return [re.sub(r"\s+", " ", item).strip() for item in inline_numbered_matches if item.strip()]
+
+    sentence_parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", cleaned) if part.strip()]
+    return sentence_parts or [cleaned]
+
+
+def _parse_export_style(question: str) -> dict[str, Any]:
+    lowered = (question or "").lower()
+
+    return {
+        "heading": _markdown_heading(question),
+        "list_style": any(token in lowered for token in ("list format", "bullet", "bulleted", "bullet list", "make a list", "as a list", "key findings")),
+    }
+
+
 def _build_markdown_document(title: str, question: str, answer: str, citations: list[dict]) -> str:
-    heading = _markdown_heading(question)
-    lines = [
-        f"# {title}",
-        "",
-        f"## {heading}",
-        "",
-        answer.strip(),
-    ]
+    style = _parse_export_style(question)
+    lines = [f"# {title}", "", f"## {style['heading']}", ""]
+    if style["list_style"]:
+        for index, point in enumerate(_extract_points(answer), start=1):
+            lines.append(f"{index}. {point}")
+    else:
+        lines.append(answer.strip())
+
     if citations:
         lines += ["", "## Citations"]
-        for item in citations:
-            section = item.get("section", "Unknown")
-            page = item.get("page", "?")
-            quote = item.get("quote", "").strip()
-            lines += ["", f"### {section} (page {page})", "", quote]
+        if style["list_style"]:
+            for item in citations:
+                section = item.get("section", "Unknown")
+                page = item.get("page", "?")
+                quote = item.get("quote", "").strip()
+                lines.append(f"- **{section} (page {page})**: {quote}")
+        else:
+            for item in citations:
+                section = item.get("section", "Unknown")
+                page = item.get("page", "?")
+                quote = item.get("quote", "").strip()
+                lines += ["", f"### {section} (page {page})", "", quote]
     return "\n".join(lines).strip() + "\n"
 
 
-def _write_pdf(path: Path, title: str, text: str) -> None:
+def _write_wrapped_lines(page, x: int, y: int, text: str, fontsize: int, width_chars: int, color=(0, 0, 0), bullet: bool = False) -> int:
+    lines = _wrap_text(text, width=width_chars)
+    for line in lines:
+        prefix = "- " if bullet else ""
+        page.insert_text((x, y), f"{prefix}{line}", fontsize=fontsize, fontname="helv", color=color)
+        y += fontsize + 5
+    return y
+
+
+def _write_pdf(path: Path, title: str, question: str, answer: str, citations: list[dict]) -> None:
+    style = _parse_export_style(question)
     doc = fitz.open()
-    lines = [title, ""] + _wrap_text(text, width=92)
     page = doc.new_page()
     y = 48
-    for idx, line in enumerate(lines):
-        if y > 780:
+
+    for line in _wrap_text(title, width=42):
+        page.insert_text((48, y), line, fontsize=20, fontname="helv", color=(0, 0, 0))
+        y += 26
+    y += 8
+
+    page.insert_text((48, y), style["heading"], fontsize=14, fontname="helv", color=(0.2, 0.2, 0.2))
+    y += 22
+
+    if style["list_style"]:
+        for index, point in enumerate(_extract_points(answer), start=1):
+            y = _write_wrapped_lines(page, 60, y, f"{index}. {point}", fontsize=11, width_chars=82)
+            y += 4
+            if y > 760:
+                page = doc.new_page()
+                y = 48
+    else:
+        y = _write_wrapped_lines(page, 48, y, answer, fontsize=11, width_chars=90)
+
+    if citations:
+        y += 10
+        if y > 760:
             page = doc.new_page()
             y = 48
-        fontsize = 16 if idx == 0 else 11
-        page.insert_text((48, y), line, fontsize=fontsize, fontname="helv")
-        y += 22 if idx == 0 else 16
+        page.insert_text((48, y), "Citations", fontsize=14, fontname="helv", color=(0.2, 0.2, 0.2))
+        y += 22
+        for item in citations:
+            section = item.get("section", "Unknown")
+            page_num = item.get("page", "?")
+            quote = item.get("quote", "").strip()
+            y = _write_wrapped_lines(page, 48, y, f"{section} (page {page_num})", fontsize=11, width_chars=88, color=(0.18, 0.36, 0.73))
+            y = _write_wrapped_lines(page, 60, y, quote, fontsize=10, width_chars=82)
+            y += 8
+            if y > 760:
+                page = doc.new_page()
+                y = 48
+
     doc.save(path)
     doc.close()
 
@@ -369,15 +447,7 @@ def create_pdf(session_id: str, title: str, question: str, answer: str, citation
     filename = _export_filename(title, question, "pdf")
     asset = record_asset(session_id, filename, "pdf", "Download PDF")
     citations = json.loads(citations_json or "[]")
-    evidence_lines = [
-        f"[{item.get('section', 'Unknown')}, page {item.get('page', '?')}] {item.get('quote', '')}"
-        for item in citations
-    ]
-    body_parts = [answer]
-    if evidence_lines:
-        body_parts.extend(["Citations", "\n".join(evidence_lines)])
-    body = "\n\n".join(body_parts)
-    _write_pdf(Path(asset["path"]), title, body)
+    _write_pdf(Path(asset["path"]), title, question, answer, citations)
     return _json(asset)
 
 

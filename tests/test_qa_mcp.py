@@ -118,6 +118,117 @@ class TestQATools:
         assert "# Experimental Search for Quantum Gravity" in text
         assert "## Summary" in text
 
+    def test_markdown_export_respects_requested_list_format(self, tmp_path, monkeypatch):
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        asset = json.loads(
+            mcp_server.create_md(
+                "sess-style",
+                "Experimental Search for Quantum Gravity",
+                "Make this a list format with headers.",
+                "First key point. Second key point.",
+                "[]",
+            )
+        )
+
+        text = Path(asset["path"]).read_text(encoding="utf-8")
+        assert "## Response" in text
+        assert "1. First key point." in text
+        assert "2. Second key point." in text
+
+    def test_markdown_export_uses_key_findings_heading_for_findings_request(self, tmp_path, monkeypatch):
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        asset = json.loads(
+            mcp_server.create_md(
+                "sess-findings",
+                "Random Forest Variance Estimation",
+                "Write me a list of the key findings made in the research.",
+                "The key findings of the research are as follows: 1. First finding. 2. Second finding.",
+                "[]",
+            )
+        )
+
+        text = Path(asset["path"]).read_text(encoding="utf-8")
+        assert "## Key Findings" in text
+        assert "1. First finding." in text
+        assert "2. Second finding." in text
+
+    def test_pdf_export_wraps_long_titles_without_truncation(self, tmp_path, monkeypatch):
+        import fitz
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        long_title = "A Comparison of Resampling and Recursive Partitioning Methods in Random Forest Forecasting"
+        asset = json.loads(
+            mcp_server.create_pdf(
+                "sess-long-title",
+                long_title,
+                "Create a formatted summary.",
+                "This is the exported answer body.",
+                "[]",
+            )
+        )
+
+        pdf_text = fitz.open(asset["path"])[0].get_text()
+        normalized = " ".join(pdf_text.split())
+        assert "A Comparison of Resampling and Recursive Partitioning Methods in Random Forest Forecasting" in normalized
+        assert "Summary" in pdf_text
+        assert "This is the exported answer body." in pdf_text
+
+    def test_pdf_export_respects_requested_list_format(self, tmp_path, monkeypatch):
+        import fitz
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        asset = json.loads(
+            mcp_server.create_pdf(
+                "sess-list-pdf",
+                "List Export",
+                "Make this a list format.",
+                "First point. Second point.",
+                "[]",
+            )
+        )
+
+        pdf_text = fitz.open(asset["path"])[0].get_text()
+        assert "List Export" in pdf_text
+        assert "Response" in pdf_text
+        assert "1. First point." in pdf_text
+        assert "2. Second point." in pdf_text
+
+    def test_pdf_export_uses_key_findings_heading_for_findings_request(self, tmp_path, monkeypatch):
+        import fitz
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        asset = json.loads(
+            mcp_server.create_pdf(
+                "sess-findings-pdf",
+                "Random Forest Variance Estimation",
+                "Write me a list of the key findings made in the research. Make it a PDF file with red text.",
+                "The key findings of the research are as follows: 1. First finding. 2. Second finding.",
+                "[]",
+            )
+        )
+
+        pdf_text = fitz.open(asset["path"])[0].get_text()
+        assert "Key Findings" in pdf_text
+        assert "1. First finding." in pdf_text
+        assert "2. Second finding." in pdf_text
+
     def test_repeated_markdown_exports_get_unique_filenames(self, tmp_path, monkeypatch):
         from app.qa import assets as qa_assets
         from app.qa import mcp_server

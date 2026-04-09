@@ -844,22 +844,95 @@ function normalizeText(text) {
     .trim();
 }
 
-function applyPdfHighlights(matchText) {
+function compactHighlightTarget(text) {
+  const normalized = normalizeText(text);
+  if (!normalized) return '';
+  const words = normalized.split(' ').filter(Boolean);
+  return words.slice(0, 28).join(' ');
+}
+
+function scoreHighlightWindow(windowText, targetText, targetTokens) {
+  if (!windowText || !targetText || targetTokens.length === 0) return 0;
+  const windowTokens = new Set(windowText.split(' ').filter(t => t.length > 1));
+  const overlap = targetTokens.filter(token => windowTokens.has(token)).length;
+  if (!overlap) return 0;
+
+  const exact = windowText.includes(targetText) || targetText.includes(windowText);
+  const coverage = overlap / targetTokens.length;
+  const lengthPenalty = Math.min(Math.abs(windowText.length - targetText.length) / Math.max(targetText.length, 1), 1.2);
+  return (exact ? 6 : 0) + (coverage * 5) - lengthPenalty;
+}
+
+function bestHighlightWindowForTarget(spans, targetText) {
+  const entries = spans
+    .map(span => ({ span, text: normalizeText(span.textContent) }))
+    .filter(entry => entry.text);
+
+  const targetTokens = targetText.split(' ').filter(t => t.length > 1);
+  if (!targetTokens.length) return { score: 0, spans: [] };
+
+  let best = { score: 0, spans: [] };
+  const maxWindowSize = 18;
+
+  for (let start = 0; start < entries.length; start += 1) {
+    let combined = '';
+    const windowSpans = [];
+
+    for (let end = start; end < Math.min(entries.length, start + maxWindowSize); end += 1) {
+      const piece = entries[end].text;
+      combined = combined ? `${combined} ${piece}` : piece;
+      windowSpans.push(entries[end].span);
+
+      const score = scoreHighlightWindow(combined, targetText, targetTokens);
+      if (score > best.score) {
+        best = { score, spans: [...windowSpans] };
+      }
+
+      if (combined.length > targetText.length * 1.8 && windowSpans.length >= 4) {
+        break;
+      }
+    }
+  }
+
+  return best;
+}
+
+function findBestHighlightSpanWindow(spans, matchText, sourceText = '') {
+  const targets = [compactHighlightTarget(matchText), compactHighlightTarget(sourceText)].filter(Boolean);
+  if (!targets.length) return [];
+  const entries = spans
+    .map(span => ({ span, text: normalizeText(span.textContent) }))
+    .filter(entry => entry.text);
+  if (!entries.length) return [];
+
+  let best = { score: 0, spans: [] };
+  targets.forEach(targetText => {
+    const candidate = bestHighlightWindowForTarget(entries.map(entry => entry.span), targetText);
+    if (candidate.score > best.score) best = candidate;
+  });
+
+  if (best.score >= 4) return best.spans;
+
+  const targetText = targets[0];
+  const targetTokens = targetText.split(' ').filter(t => t.length > 1);
+
+  const fallback = entries
+    .map(entry => {
+      const spanTokens = new Set(entry.text.split(' ').filter(t => t.length > 1));
+      const overlap = targetTokens.filter(token => spanTokens.has(token)).length;
+      return { span: entry.span, score: overlap };
+    })
+    .filter(entry => entry.score >= 2)
+    .sort((a, b) => b.score - a.score);
+
+  return fallback.slice(0, 2).map(entry => entry.span);
+}
+
+function applyPdfHighlights(matchText, sourceText = '') {
   const spans = Array.from(document.querySelectorAll('#qa-pdf-text-layer span'));
   spans.forEach(span => span.classList.remove('qa-text-highlight'));
-  const target = normalizeText(matchText);
-  if (!target) return;
-  const targetTokens = new Set(target.split(' ').filter(t => t.length > 2));
-  const ranked = spans.map(span => {
-    const text = normalizeText(span.textContent);
-    if (!text) return { span, score: 0 };
-    const spanTokens = new Set(text.split(' ').filter(t => t.length > 2));
-    const overlap = [...targetTokens].filter(token => spanTokens.has(token)).length;
-    const exact = target.includes(text) || text.includes(target);
-    return { span, score: exact ? overlap + 5 : overlap };
-  }).filter(item => item.score >= 2).sort((a, b) => b.score - a.score);
-
-  ranked.slice(0, 10).forEach(item => item.span.classList.add('qa-text-highlight'));
+  const matchedSpans = findBestHighlightSpanWindow(spans, matchText, sourceText);
+  matchedSpans.forEach(span => span.classList.add('qa-text-highlight'));
 }
 
 async function renderPdfPage(pageNumber, evidenceItem = null) {
@@ -888,7 +961,10 @@ async function renderPdfPage(pageNumber, evidenceItem = null) {
   }).promise;
 
   document.getElementById('qa-page-indicator').textContent = `Page ${pageNumber} / ${state.pdfDoc.numPages}`;
-  applyPdfHighlights(evidenceItem?.match_text || evidenceItem?.quote || '');
+  applyPdfHighlights(
+    evidenceItem?.match_text || evidenceItem?.quote || '',
+    evidenceItem?.source_chunk || ''
+  );
 }
 
 async function openEvidenceItem(index) {
