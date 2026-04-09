@@ -1,3 +1,0 @@
-# Experimental Search for Quantum Gravity
-
-The paper "Experimental Search for Quantum Gravity" by Sabine Hossenfelder provides a survey of experimental tests for quantum gravity. It discusses the challenges in testing quantum gravity due to the high energy scales involved, which are far beyond current experimental capabilities. The paper outlines phenomenological models used in quantum gravity research and emphasizes the importance of collaboration between theoretical and experimental physicists. It highlights the need for creativity and technological advancements to make progress in this field, despite the lack of experimental signatures for quantum gravitational effects so far.

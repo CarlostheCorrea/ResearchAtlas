@@ -636,6 +636,31 @@ async function loadQaTools(force = false) {
   }
 }
 
+async function clearQaAssets() {
+  const hasActiveAssets = state.currentQaResult?.assets?.length || 0;
+  const confirmed = window.confirm(
+    hasActiveAssets
+      ? 'Delete all generated Q/A files from disk? This will remove current downloads and graphics.'
+      : 'Delete all generated Q/A files from disk?'
+  );
+  if (!confirmed) return;
+
+  try {
+    const result = await apiDelete('/api/qa/assets');
+    showToast(`Cleared ${result.removed_sessions} Q/A asset folder${result.removed_sessions !== 1 ? 's' : ''}.`, 'success');
+    document.getElementById('qa-assets').innerHTML = 'Generated Markdown and PDF downloads will appear here.';
+    document.getElementById('qa-assets').classList.add('qa-empty');
+    document.getElementById('qa-graphic').innerHTML = '';
+    document.getElementById('qa-graphic-panel').classList.add('hidden');
+    if (state.currentQaResult) {
+      state.currentQaResult.assets = [];
+      state.currentQaResult.generated_image = null;
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
 function renderChatMessage(role, content, citations = []) {
   const messages = document.getElementById('chat-messages');
   const el = document.createElement('div');
@@ -1178,6 +1203,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const evidence = state.currentQaResult?.evidence_bundle?.items?.[state.pdfEvidenceIndex] || null;
     await renderPdfPage(state.pdfCurrentPage, evidence);
   });
+
+  document.getElementById('qa-clear-assets-btn').addEventListener('click', clearQaAssets);
 
   // Approval modal buttons
   document.getElementById('btn-approve').addEventListener('click', () => submitReview('approved'));

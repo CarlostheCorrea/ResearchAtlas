@@ -43,3 +43,4 @@ MIN_ABSTRACT_LENGTH: int = int(os.environ.get("MIN_ABSTRACT_LENGTH", "50"))
 
 # Q/A orchestrator
 QA_MAX_TOOL_STEPS: int = int(os.environ.get("QA_MAX_TOOL_STEPS", "4"))
+QA_ASSET_MAX_AGE_HOURS: int = int(os.environ.get("QA_ASSET_MAX_AGE_HOURS", "24"))

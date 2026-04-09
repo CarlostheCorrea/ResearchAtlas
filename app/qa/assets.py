@@ -28,8 +28,24 @@ def build_asset_url(session_id: str, filename: str) -> str:
     return f"/qa-assets/{session_id}/{filename}"
 
 
+def _unique_filename(session_dir: Path, filename: str) -> str:
+    candidate = session_dir / filename
+    if not candidate.exists():
+        return filename
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    counter = 2
+    while True:
+        next_name = f"{stem}-{counter}{suffix}"
+        if not (session_dir / next_name).exists():
+            return next_name
+        counter += 1
+
+
 def record_asset(session_id: str, filename: str, kind: str, label: str) -> dict:
     session_dir = ensure_session_dir(session_id)
+    filename = _unique_filename(session_dir, filename)
     path = session_dir / filename
     return {
         "kind": kind,
@@ -55,3 +71,24 @@ def purge_old_assets(max_age_hours: int = 24) -> None:
                 child.rmdir()
         except OSError:
             continue
+
+
+def clear_all_assets() -> int:
+    root = ensure_assets_root()
+    removed = 0
+    for child in list(root.iterdir()):
+        try:
+            if child.is_dir():
+                for nested in child.rglob("*"):
+                    if nested.is_file():
+                        nested.unlink(missing_ok=True)
+                for nested_dir in sorted(child.rglob("*"), reverse=True):
+                    if nested_dir.is_dir():
+                        nested_dir.rmdir()
+                child.rmdir()
+                removed += 1
+            elif child.is_file():
+                child.unlink(missing_ok=True)
+        except OSError:
+            continue
+    return removed

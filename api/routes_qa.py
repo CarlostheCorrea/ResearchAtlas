@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks
 
 from app.qa.mcp_host import qa_mcp_session
 from app.qa.orchestrator import run_qa_orchestrator
+from app.qa.assets import clear_all_assets
 from app.schemas import QARequest
 
 router = APIRouter()
@@ -78,3 +79,9 @@ async def qa_tools():
             for tool in tools_result.tools
         ]
     return {"tools": tools}
+
+
+@router.delete("/api/qa/assets")
+async def delete_qa_assets():
+    removed = clear_all_assets()
+    return {"status": "ok", "removed_sessions": removed}

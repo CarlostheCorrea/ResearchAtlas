@@ -15,7 +15,7 @@ from api.routes_chat import router as chat_router
 from api.routes_qa import router as qa_router
 from api.routes_review import router as review_router
 from api.routes_library import router as library_router
-from app.config import PDF_DIR, QA_ASSETS_DIR, VECTORSTORE_DIR
+from app.config import PDF_DIR, QA_ASSET_MAX_AGE_HOURS, QA_ASSETS_DIR, VECTORSTORE_DIR
 from app.qa.assets import purge_old_assets
 
 app = FastAPI(
@@ -39,7 +39,7 @@ async def startup():
     os.makedirs(PDF_DIR, exist_ok=True)
     os.makedirs(VECTORSTORE_DIR, exist_ok=True)
     os.makedirs(QA_ASSETS_DIR, exist_ok=True)
-    purge_old_assets()
+    purge_old_assets(QA_ASSET_MAX_AGE_HOURS)
     print("[main] Database initialized, data directories ready.")
 
 

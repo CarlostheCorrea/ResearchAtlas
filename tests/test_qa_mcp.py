@@ -118,6 +118,36 @@ class TestQATools:
         assert "# Experimental Search for Quantum Gravity" in text
         assert "## Summary" in text
 
+    def test_repeated_markdown_exports_get_unique_filenames(self, tmp_path, monkeypatch):
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        first = json.loads(
+            mcp_server.create_md("sess-repeat", "Experimental Search for Quantum Gravity", "Create a markdown summary.", "First version.", "[]")
+        )
+        second = json.loads(
+            mcp_server.create_md("sess-repeat", "Experimental Search for Quantum Gravity", "Create a markdown summary.", "Second version.", "[]")
+        )
+
+        assert first["filename"] == "experimental-search-for-quantum-gravity-summary.md"
+        assert second["filename"] == "experimental-search-for-quantum-gravity-summary-2.md"
+        assert first["url"] != second["url"]
+        assert "Second version." in Path(second["path"]).read_text(encoding="utf-8")
+
+    def test_clear_all_assets_removes_session_folders(self, tmp_path, monkeypatch):
+        from app.qa import assets as qa_assets
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+        session_dir = qa_assets.ensure_session_dir("sess-clear")
+        (session_dir / "file.txt").write_text("x", encoding="utf-8")
+
+        removed = qa_assets.clear_all_assets()
+
+        assert removed == 1
+        assert not any(Path(qa_assets.QA_ASSETS_DIR).iterdir())
+
     def test_create_graphic_uses_minimal_openai_request(self, tmp_path, monkeypatch):
         from app.qa import assets as qa_assets
         from app.qa import mcp_server

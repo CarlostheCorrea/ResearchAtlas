@@ -687,6 +687,21 @@ body {
   color: var(--ink-3);
   margin-bottom: 10px;
 }
+.qa-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.qa-panel-header .qa-panel-title {
+  margin-bottom: 0;
+}
+.qa-mini-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
 .qa-empty {
   color: var(--text-muted);
   font-size: 12px;
