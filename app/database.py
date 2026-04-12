@@ -150,11 +150,39 @@ def upsert_saved_paper(arxiv_id: str, title: str, summary_dict: dict, notes: str
 
 def list_saved_papers() -> list[dict]:
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM saved_papers ORDER BY saved_at DESC"
-    ).fetchall()
+    rows = conn.execute("""
+        SELECT
+            sp.*,
+            pc.title AS cached_title,
+            pc.authors_json,
+            pc.abstract,
+            pc.published,
+            pc.pdf_url,
+            pc.categories_json
+        FROM saved_papers sp
+        LEFT JOIN papers_cache pc ON pc.arxiv_id = sp.arxiv_id
+        ORDER BY sp.saved_at DESC
+    """).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+
+    papers = []
+    for row in rows:
+        paper = dict(row)
+        cached_title = paper.pop("cached_title", None)
+        paper["title"] = paper.get("title") or cached_title or paper["arxiv_id"]
+        try:
+            paper["authors"] = json.loads(paper.pop("authors_json", "[]") or "[]")
+        except json.JSONDecodeError:
+            paper["authors"] = []
+        try:
+            paper["categories"] = json.loads(paper.pop("categories_json", "[]") or "[]")
+        except json.JSONDecodeError:
+            paper["categories"] = []
+        paper["abstract"] = paper.get("abstract") or ""
+        paper["published"] = paper.get("published") or ""
+        paper["pdf_url"] = paper.get("pdf_url") or f"https://arxiv.org/pdf/{paper['arxiv_id']}"
+        papers.append(paper)
+    return papers
 
 
 def set_paper_rating(arxiv_id: str, rating: int) -> bool:

@@ -127,7 +127,24 @@ body {
   border-bottom: 1px solid var(--border);
   transition: border-color 0.25s;
 }
-.app-header-left { display: flex; align-items: center; gap: 8px; }
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.app-header-left:hover #app-title,
+.app-header-left:focus #app-title {
+  color: var(--accent);
+}
+.app-header-left:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+}
 #app-logo { display: none; }
 #app-title {
   font-family: var(--font-serif);
@@ -1323,7 +1340,14 @@ body {
   padding: 14px 16px;
   margin-bottom: 10px;
   background: var(--card);
-  transition: background 0.25s, border-color 0.25s;
+  cursor: pointer;
+  transition: background 0.25s, border-color 0.25s, transform 0.15s;
+}
+.library-card:hover,
+.library-card:focus {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  outline: none;
 }
 .library-card-title {
   font-family: var(--font-serif);

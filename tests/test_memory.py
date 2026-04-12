@@ -53,6 +53,27 @@ class TestDatabase:
         assert len(matches) == 1
         assert matches[0]["title"] == "Title B"
 
+    def test_list_saved_papers_includes_cached_metadata(self):
+        import app.database as db
+        db.cache_paper_metadata({
+            "arxiv_id": "metadata_test_001",
+            "title": "Cached Metadata Paper",
+            "authors": ["Ada Lovelace", "Grace Hopper"],
+            "abstract": "This cached abstract should appear when reopening a saved paper.",
+            "published": "2026-01-02",
+            "pdf_url": "https://arxiv.org/pdf/metadata_test_001",
+            "categories": ["cs.AI"],
+        })
+        db.upsert_saved_paper("metadata_test_001", "Saved Metadata Paper", {})
+
+        paper = next(p for p in db.list_saved_papers() if p["arxiv_id"] == "metadata_test_001")
+
+        assert paper["authors"] == ["Ada Lovelace", "Grace Hopper"]
+        assert paper["abstract"] == "This cached abstract should appear when reopening a saved paper."
+        assert paper["published"] == "2026-01-02"
+        assert paper["categories"] == ["cs.AI"]
+        assert paper["pdf_url"] == "https://arxiv.org/pdf/metadata_test_001"
+
     def test_delete_saved_paper(self):
         import app.database as db
         db.upsert_saved_paper("delete_test_001", "Delete Me", {})

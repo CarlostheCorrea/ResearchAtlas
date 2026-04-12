@@ -134,15 +134,15 @@ function renderLandingLibrary(papers) {
 }
 
 function openSavedPaper(savedPaper) {
-  // Construct a paper-like object from the saved record
+  // Construct a paper-like object from the saved record plus cached arXiv metadata.
   const paper = {
     arxiv_id: savedPaper.arxiv_id,
     title: savedPaper.title || savedPaper.arxiv_id,
-    authors: [],
-    abstract: '',
-    published: savedPaper.saved_at ? savedPaper.saved_at.slice(0, 10) : '',
-    categories: [],
-    pdf_url: `https://arxiv.org/pdf/${savedPaper.arxiv_id}`,
+    authors: Array.isArray(savedPaper.authors) ? savedPaper.authors : [],
+    abstract: savedPaper.abstract || '',
+    published: savedPaper.published || '',
+    categories: Array.isArray(savedPaper.categories) ? savedPaper.categories : [],
+    pdf_url: savedPaper.pdf_url || `https://arxiv.org/pdf/${savedPaper.arxiv_id}`,
   };
 
   // Try to parse the saved summary JSON
@@ -1177,7 +1177,7 @@ async function loadLibrary() {
         </button>
       </div>
       ${papers.map(p => `
-        <div class="library-card" data-arxiv="${p.arxiv_id}">
+        <div class="library-card" data-arxiv="${p.arxiv_id}" role="button" tabindex="0" title="Open saved paper">
           <div class="library-card-title">${escHtml(p.title || p.arxiv_id)}</div>
           <div class="library-card-date">
             <span style="font-family:var(--font-mono)">${p.arxiv_id}</span>
@@ -1196,16 +1196,36 @@ async function loadLibrary() {
     // "Delete All" button
     document.getElementById('btn-clear-library').addEventListener('click', clearLibrary);
 
+    // Click a saved paper card to reopen it with its summary and cached metadata.
+    pane.querySelectorAll('.library-card').forEach(card => {
+      const openCard = () => {
+        const saved = state.library.find(p => p.arxiv_id === card.dataset.arxiv);
+        if (saved) openSavedPaper(saved);
+      };
+      card.addEventListener('click', openCard);
+      card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openCard();
+        }
+      });
+    });
+
     // Per-card remove buttons (event delegation avoids onclick in HTML)
     pane.querySelectorAll('[data-remove]').forEach(btn => {
-      btn.addEventListener('click', () => removeFromLibrary(btn.dataset.remove));
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        removeFromLibrary(btn.dataset.remove);
+      });
     });
 
     // Star rating click handlers — persist immediately to DB
     pane.querySelectorAll('.star-rating').forEach(ratingEl => {
       const arxivId = ratingEl.dataset.arxiv;
+      ratingEl.addEventListener('click', event => event.stopPropagation());
       ratingEl.querySelectorAll('.star').forEach(star => {
-        star.addEventListener('click', async () => {
+        star.addEventListener('click', async (event) => {
+          event.stopPropagation();
           const rating = parseInt(star.dataset.rating);
           // Update visuals instantly
           ratingEl.querySelectorAll('.star').forEach((s, i) => {
@@ -1642,6 +1662,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Theme toggle button
   document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
+  document.getElementById('home-btn').addEventListener('click', () => {
+    window.location.href = window.location.pathname;
+  });
 
   // Bootstrap: load library immediately for landing page + search indicators
   initApp();
