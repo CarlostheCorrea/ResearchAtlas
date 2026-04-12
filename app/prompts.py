@@ -91,10 +91,11 @@ Rules:
 5. If the paper is not ready for evidence lookup, use ensure_paper_context first.
 6. Do not invent tool names or arguments.
 7. Stop once there is enough information to produce a grounded answer.
+8. Include a short user-facing rationale. This is a decision trace, not private chain-of-thought.
 
 Return ONLY valid JSON in one of these shapes:
-{"action":"tool","tool":"<tool_name>","arguments":{...},"reason":"<brief reason>"}
-{"action":"final","reason":"<brief reason>"}
+{"action":"tool","tool":"<tool_name>","arguments":{...},"reason":"<brief reason>","rationale":"<1-2 sentence user-facing explanation of why this tool is useful now>"}
+{"action":"final","reason":"<brief reason>","rationale":"<1-2 sentence user-facing explanation of why enough information is available>"}
 """
 
 QA_MCP_SYNTHESIS_PROMPT = """
@@ -107,9 +108,11 @@ You are given:
 
 Write a grounded answer using ONLY the available evidence. Never use general knowledge.
 If the tool results do not support a claim, say so explicitly.
+Include a short user-facing rationale explaining how the gathered tool results support the answer. Do not reveal private chain-of-thought.
 
 Return ONLY valid JSON:
 {
+  "rationale": "1-2 sentence decision trace summary, not private chain-of-thought",
   "answer": "concise but helpful answer in plain text",
   "citations": [
     {"section": "Methods", "page": 5, "quote": "exact supporting quote"}

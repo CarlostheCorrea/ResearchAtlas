@@ -30,12 +30,16 @@ const state = {
   pollingInterval: null,
   pendingInterrupt: null,
   currentQaResult: null,
+  qaThreadSessionId: null,
+  qaThreadPaperId: null,
   currentQaPoll: null,
   availableQaTools: [],
   pdfDoc: null,
   pdfUrl: null,
   pdfCurrentPage: 1,
+  pdfScale: 1.2,
   pdfEvidenceIndex: null,
+  qaLogCount: 0,
 };
 
 // ── API helpers ────────────────────────────────────────────────────────────────
@@ -564,32 +568,98 @@ async function submitReview(decision, revisionNote = '') {
   }
 }
 
+// ── Q/A side-panel tab switching ───────────────────────────────────────────────
+function switchQaSideTab(name) {
+  document.querySelectorAll('.qa-side-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.qaside === name);
+  });
+  document.getElementById('qa-side-tools').classList.toggle('hidden', name !== 'tools');
+  document.getElementById('qa-side-logs').classList.toggle('hidden', name !== 'logs');
+}
+
+// ── Event log ─────────────────────────────────────────────────────────────────
+function appendLog(level, message) {
+  const container = document.getElementById('qa-log-entries');
+  if (!container) return;
+  // Clear placeholder text on first real entry
+  if (container.classList.contains('qa-empty')) {
+    container.innerHTML = '';
+    container.classList.remove('qa-empty');
+  }
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const entry = document.createElement('div');
+  entry.className = `qa-log-entry qa-log-${level}`;
+  entry.innerHTML =
+    `<span class="qa-log-time">${time}</span>` +
+    `<span class="qa-log-msg">${escHtml(message)}</span>`;
+  container.appendChild(entry);
+  container.scrollTop = container.scrollHeight;
+  state.qaLogCount++;
+  // Badge the Logs tab when it isn't the active pane
+  const logsTab = document.querySelector('.qa-side-tab[data-qaside="logs"]');
+  if (logsTab && !logsTab.classList.contains('active')) {
+    logsTab.textContent = `Logs (${state.qaLogCount})`;
+  }
+}
+
+function clearQaLog() {
+  state.qaLogCount = 0;
+  const container = document.getElementById('qa-log-entries');
+  if (!container) return;
+  container.innerHTML = '<span class="qa-log-placeholder">No activity yet. Ask a question to see logs.</span>';
+  container.classList.add('qa-empty');
+  const logsTab = document.querySelector('.qa-side-tab[data-qaside="logs"]');
+  if (logsTab) logsTab.textContent = 'Logs';
+}
+
 // ── Q&A flow ───────────────────────────────────────────────────────────────────
 async function sendQuestion(question) {
   if (!state.currentPaper || !question.trim()) return;
 
   resetPdfViewer();
+  clearQaLog();
+  appendLog('info', `Q/A started — "${question}"`);
   renderChatMessage('user', question);
   const typingEl = addTypingIndicator();
 
-  const session_id = generateId();
+  if (state.qaThreadPaperId !== state.currentPaper.arxiv_id) {
+    state.qaThreadSessionId = null;
+    state.qaThreadPaperId = state.currentPaper.arxiv_id;
+  }
+  const session_id = state.qaThreadSessionId || generateId();
+  state.qaThreadSessionId = session_id;
   state.currentSession = session_id;
   state.currentQaResult = null;
   updateStatusBar('Running MCP Q/A...', 'running');
 
   try {
+    appendLog('info', 'Sending request to Q/A orchestrator...');
     const result = await apiPost('/api/qa', {
       message: question,
       arxiv_id: state.currentPaper.arxiv_id,
       session_id,
     });
+    appendLog('info', `Session ${result.session_id?.slice(0, 8) ?? '?'} — MCP pipeline running`);
 
     // Poll for answer
     const pollForAnswer = async () => {
-      for (let i = 0; i < 60; i++) {
-        await sleep(1200);
+      let seenTimeline = 0;
+      for (let i = 0; i < 120; i++) {
+        await sleep(1500);
         const status = await apiGet(`/api/qa/status/${result.session_id}`);
-        renderToolTimeline(status.tool_timeline || []);
+        const timeline = status.tool_timeline || [];
+        renderToolTimeline(timeline);
+        // Log only new timeline entries since last poll
+        const newEntries = timeline.slice(seenTimeline);
+        newEntries.forEach(entry => {
+          const lvl = entry.kind === 'rationale' ? 'info'
+                    : entry.status === 'failed' ? 'err'
+                    : entry.status === 'completed' ? 'ok'
+                    : 'info';
+          const detail = entry.details ? ` — ${entry.details}` : '';
+          appendLog(lvl, `${entry.kind === 'rationale' ? 'CoT Trace: ' : ''}${entry.title}${detail}`);
+        });
+        seenTimeline = timeline.length;
         if (status.status === 'completed') {
           typingEl.remove();
           state.currentQaResult = status;
@@ -597,18 +667,21 @@ async function sendQuestion(question) {
             renderChatMessage('assistant', status.chat_message, status.answer_citations || []);
           }
           renderQaArtifacts(status);
+          appendLog('ok', 'Q/A complete');
           updateStatusBar('Q/A complete', 'ok');
           return;
         }
         if (status.status === 'error') {
           typingEl.remove();
           renderChatMessage('assistant', `Error: ${status.error}`, []);
+          appendLog('err', `Q/A failed — ${status.error || 'unknown error'}`);
           updateStatusBar('Q/A failed', 'error');
           return;
         }
       }
       typingEl.remove();
       renderChatMessage('assistant', 'Request timed out. Please try again.', []);
+      appendLog('warn', 'Q/A timed out after 180 s');
       updateStatusBar('Q/A timed out', 'error');
     };
 
@@ -616,6 +689,7 @@ async function sendQuestion(question) {
   } catch (err) {
     typingEl.remove();
     renderChatMessage('assistant', `Error: ${err.message}`, []);
+    appendLog('err', `Request failed — ${err.message}`);
     updateStatusBar('Q/A failed', 'error');
   }
 }
@@ -629,10 +703,12 @@ async function loadQaTools(force = false) {
     const result = await apiGet('/api/qa/tools');
     state.availableQaTools = result.tools || [];
     renderAvailableTools(state.availableQaTools);
+    appendLog('ok', `MCP server ready — ${state.availableQaTools.length} tools available`);
   } catch (err) {
     const container = document.getElementById('qa-available-tools');
     container.innerHTML = 'Could not load the MCP tool list.';
     container.classList.add('qa-empty');
+    appendLog('err', `MCP tool list failed to load — ${err.message}`);
   }
 }
 
@@ -709,6 +785,8 @@ function resetQaWorkspace() {
   document.getElementById('qa-graphic-panel').classList.add('hidden');
   document.getElementById('qa-evidence-panel').classList.add('hidden');
   state.currentQaResult = null;
+  state.qaThreadSessionId = null;
+  state.qaThreadPaperId = null;
   resetPdfViewer();
   loadQaTools();
 }
@@ -721,12 +799,22 @@ function renderToolTimeline(timeline) {
     return;
   }
   container.classList.remove('qa-empty');
-  container.innerHTML = timeline.map(step => `
-    <div class="qa-tool-step">
-      <div class="qa-tool-step-title">${escHtml(step.title || step.tool || 'Tool')}</div>
-      <div class="qa-tool-step-meta">${escHtml(step.details || '')}</div>
-    </div>
-  `).join('');
+  container.innerHTML = timeline.map(step => {
+    if (step.kind === 'rationale') {
+      return `
+        <div class="qa-cot-entry">
+          <div class="qa-cot-label">${escHtml(step.title || 'CoT Trace')}</div>
+          <div class="qa-cot-text">${escHtml(step.details || '')}</div>
+        </div>
+      `;
+    }
+    return `
+      <div class="qa-tool-step">
+        <div class="qa-tool-step-title">${escHtml(step.title || step.tool || 'Tool')}</div>
+        <div class="qa-tool-step-meta">${escHtml(step.details || '')}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderQaArtifacts(result) {
@@ -782,10 +870,18 @@ function renderGeneratedGraphic(asset) {
     return;
   }
   panel.classList.remove('hidden');
-  container.innerHTML = `
-    <img src="${asset.url}" alt="${escHtml(asset.label || 'Generated graphic')}" />
-    ${asset.revised_prompt ? `<div class="qa-graphic-caption">${escHtml(asset.revised_prompt)}</div>` : ''}
-  `;
+  container.innerHTML = `<img src="${asset.url}" alt="${escHtml(asset.label || 'Generated graphic')}" />`;
+  // "View full size" link sits outside the scrollable image box
+  let link = document.getElementById('qa-graphic-link');
+  if (!link) {
+    link = document.createElement('a');
+    link.id = 'qa-graphic-link';
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'View full size ↗';
+    panel.appendChild(link);
+  }
+  link.href = asset.url;
 }
 
 function renderEvidenceBundle(bundle) {
@@ -794,7 +890,7 @@ function renderEvidenceBundle(bundle) {
   const items = bundle?.items || [];
   if (!bundle?.enabled || items.length === 0) {
     panel.classList.add('hidden');
-    container.innerHTML = 'Evidence quotes and PDF highlights will appear here.';
+    container.innerHTML = 'Evidence quotes will appear here.';
     container.classList.add('qa-empty');
     resetPdfViewer();
     return;
@@ -817,14 +913,13 @@ function resetPdfViewer() {
   state.pdfDoc = null;
   state.pdfUrl = null;
   state.pdfCurrentPage = 1;
+  state.pdfScale = 1.2;
   state.pdfEvidenceIndex = null;
   const canvas = document.getElementById('qa-pdf-canvas');
-  const textLayer = document.getElementById('qa-pdf-text-layer');
   if (canvas) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width || 1, canvas.height || 1);
   }
-  if (textLayer) textLayer.innerHTML = '';
   document.getElementById('qa-page-indicator').textContent = 'Page 0 / 0';
 }
 
@@ -836,135 +931,16 @@ async function ensurePdfDocument(url) {
   return state.pdfDoc;
 }
 
-function normalizeText(text) {
-  return String(text || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function compactHighlightTarget(text) {
-  const normalized = normalizeText(text);
-  if (!normalized) return '';
-  const words = normalized.split(' ').filter(Boolean);
-  return words.slice(0, 28).join(' ');
-}
-
-function scoreHighlightWindow(windowText, targetText, targetTokens) {
-  if (!windowText || !targetText || targetTokens.length === 0) return 0;
-  const windowTokens = new Set(windowText.split(' ').filter(t => t.length > 1));
-  const overlap = targetTokens.filter(token => windowTokens.has(token)).length;
-  if (!overlap) return 0;
-
-  const exact = windowText.includes(targetText) || targetText.includes(windowText);
-  const coverage = overlap / targetTokens.length;
-  const lengthPenalty = Math.min(Math.abs(windowText.length - targetText.length) / Math.max(targetText.length, 1), 1.2);
-  return (exact ? 6 : 0) + (coverage * 5) - lengthPenalty;
-}
-
-function bestHighlightWindowForTarget(spans, targetText) {
-  const entries = spans
-    .map(span => ({ span, text: normalizeText(span.textContent) }))
-    .filter(entry => entry.text);
-
-  const targetTokens = targetText.split(' ').filter(t => t.length > 1);
-  if (!targetTokens.length) return { score: 0, spans: [] };
-
-  let best = { score: 0, spans: [] };
-  const maxWindowSize = 18;
-
-  for (let start = 0; start < entries.length; start += 1) {
-    let combined = '';
-    const windowSpans = [];
-
-    for (let end = start; end < Math.min(entries.length, start + maxWindowSize); end += 1) {
-      const piece = entries[end].text;
-      combined = combined ? `${combined} ${piece}` : piece;
-      windowSpans.push(entries[end].span);
-
-      const score = scoreHighlightWindow(combined, targetText, targetTokens);
-      if (score > best.score) {
-        best = { score, spans: [...windowSpans] };
-      }
-
-      if (combined.length > targetText.length * 1.8 && windowSpans.length >= 4) {
-        break;
-      }
-    }
-  }
-
-  return best;
-}
-
-function findBestHighlightSpanWindow(spans, matchText, sourceText = '') {
-  const targets = [compactHighlightTarget(matchText), compactHighlightTarget(sourceText)].filter(Boolean);
-  if (!targets.length) return [];
-  const entries = spans
-    .map(span => ({ span, text: normalizeText(span.textContent) }))
-    .filter(entry => entry.text);
-  if (!entries.length) return [];
-
-  let best = { score: 0, spans: [] };
-  targets.forEach(targetText => {
-    const candidate = bestHighlightWindowForTarget(entries.map(entry => entry.span), targetText);
-    if (candidate.score > best.score) best = candidate;
-  });
-
-  if (best.score >= 4) return best.spans;
-
-  const targetText = targets[0];
-  const targetTokens = targetText.split(' ').filter(t => t.length > 1);
-
-  const fallback = entries
-    .map(entry => {
-      const spanTokens = new Set(entry.text.split(' ').filter(t => t.length > 1));
-      const overlap = targetTokens.filter(token => spanTokens.has(token)).length;
-      return { span: entry.span, score: overlap };
-    })
-    .filter(entry => entry.score >= 2)
-    .sort((a, b) => b.score - a.score);
-
-  return fallback.slice(0, 2).map(entry => entry.span);
-}
-
-function applyPdfHighlights(matchText, sourceText = '') {
-  const spans = Array.from(document.querySelectorAll('#qa-pdf-text-layer span'));
-  spans.forEach(span => span.classList.remove('qa-text-highlight'));
-  const matchedSpans = findBestHighlightSpanWindow(spans, matchText, sourceText);
-  matchedSpans.forEach(span => span.classList.add('qa-text-highlight'));
-}
-
-async function renderPdfPage(pageNumber, evidenceItem = null) {
+async function renderPdfPage(pageNumber) {
   if (!state.pdfDoc) return;
   const page = await state.pdfDoc.getPage(pageNumber);
-  const viewport = page.getViewport({ scale: 1.2 });
+  const viewport = page.getViewport({ scale: state.pdfScale });
   const canvas = document.getElementById('qa-pdf-canvas');
   const ctx = canvas.getContext('2d');
   canvas.width = viewport.width;
   canvas.height = viewport.height;
   await page.render({ canvasContext: ctx, viewport }).promise;
-
-  const textLayer = document.getElementById('qa-pdf-text-layer');
-  textLayer.innerHTML = '';
-  textLayer.style.width = `${viewport.width}px`;
-  textLayer.style.height = `${viewport.height}px`;
-  textLayer.style.left = `${canvas.offsetLeft}px`;
-  textLayer.style.top = `${canvas.offsetTop}px`;
-
-  const textContent = await page.getTextContent();
-  await window.pdfjsLib.renderTextLayer({
-    textContentSource: textContent,
-    container: textLayer,
-    viewport,
-    textDivs: [],
-  }).promise;
-
   document.getElementById('qa-page-indicator').textContent = `Page ${pageNumber} / ${state.pdfDoc.numPages}`;
-  applyPdfHighlights(
-    evidenceItem?.match_text || evidenceItem?.quote || '',
-    evidenceItem?.source_chunk || ''
-  );
 }
 
 async function openEvidenceItem(index) {
@@ -981,9 +957,11 @@ async function openEvidenceItem(index) {
   if (!pdfUrl) return;
   try {
     const doc = await ensurePdfDocument(pdfUrl);
-    const pageNumber = Math.max(1, Math.min(item.page || 1, doc.numPages));
+    // Page numbers from chunker are estimated from char position in cleaned text,
+    // which strips preamble pages — actual PDF page is 1 ahead
+    const pageNumber = Math.max(1, Math.min((item.page || 1) + 1, doc.numPages));
     state.pdfCurrentPage = pageNumber;
-    await renderPdfPage(pageNumber, item);
+    await renderPdfPage(pageNumber);
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -1270,17 +1248,39 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('qa-prev-page').addEventListener('click', async () => {
     if (!state.pdfDoc || state.pdfCurrentPage <= 1) return;
     state.pdfCurrentPage -= 1;
-    const evidence = state.currentQaResult?.evidence_bundle?.items?.[state.pdfEvidenceIndex] || null;
-    await renderPdfPage(state.pdfCurrentPage, evidence);
+    await renderPdfPage(state.pdfCurrentPage);
   });
   document.getElementById('qa-next-page').addEventListener('click', async () => {
     if (!state.pdfDoc || state.pdfCurrentPage >= state.pdfDoc.numPages) return;
     state.pdfCurrentPage += 1;
-    const evidence = state.currentQaResult?.evidence_bundle?.items?.[state.pdfEvidenceIndex] || null;
-    await renderPdfPage(state.pdfCurrentPage, evidence);
+    await renderPdfPage(state.pdfCurrentPage);
+  });
+  document.getElementById('qa-zoom-out').addEventListener('click', async () => {
+    if (!state.pdfDoc) return;
+    state.pdfScale = Math.max(0.5, +(state.pdfScale - 0.2).toFixed(1));
+    document.getElementById('qa-zoom-level').textContent = Math.round(state.pdfScale * 100) + '%';
+    await renderPdfPage(state.pdfCurrentPage);
+  });
+  document.getElementById('qa-zoom-in').addEventListener('click', async () => {
+    if (!state.pdfDoc) return;
+    state.pdfScale = Math.min(3.0, +(state.pdfScale + 0.2).toFixed(1));
+    document.getElementById('qa-zoom-level').textContent = Math.round(state.pdfScale * 100) + '%';
+    await renderPdfPage(state.pdfCurrentPage);
   });
 
   document.getElementById('qa-clear-assets-btn').addEventListener('click', clearQaAssets);
+  document.getElementById('qa-clear-log-btn').addEventListener('click', clearQaLog);
+
+  document.querySelectorAll('.qa-side-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchQaSideTab(btn.dataset.qaside);
+      // Reset badge on the Logs tab when user opens it
+      if (btn.dataset.qaside === 'logs') {
+        state.qaLogCount = 0;
+        btn.textContent = 'Logs';
+      }
+    });
+  });
 
   // Approval modal buttons
   document.getElementById('btn-approve').addEventListener('click', () => submitReview('approved'));

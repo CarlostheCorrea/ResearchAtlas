@@ -53,6 +53,26 @@ class TestQATools:
         assert result["evidence"][0]["section"] == "Results"
         assert "accuracy" in result["evidence"][0]["quote"].lower()
 
+    def test_evidence_items_include_source_chunk_context(self):
+        from app.qa import mcp_server
+
+        evidence = mcp_server._evidence_from_chunks(
+            "1234.5678",
+            "What evidence supports the main claim?",
+            [
+                {
+                    "text": "The model improves accuracy by 12 percent over the baseline on the benchmark dataset.",
+                    "section": "Results",
+                    "page": 7,
+                    "arxiv_id": "1234.5678",
+                }
+            ],
+            max_items=1,
+        )
+
+        assert "accuracy" in evidence[0]["quote"].lower()
+        assert evidence[0]["source_chunk"].startswith("The model improves accuracy")
+
     def test_export_tools_write_files(self, tmp_path, monkeypatch):
         from app.qa import mcp_server
         from app.qa import assets as qa_assets
@@ -280,14 +300,14 @@ class TestQATools:
             return _Response()
 
         monkeypatch.setattr(mcp_server.client.images, "generate", fake_generate)
+        monkeypatch.setattr(mcp_server, "_validate_image_text", lambda image_bytes: [])
         asset = json.loads(mcp_server.create_graphic("sess-3", "draw a workflow", "Graphic"))
 
         assert Path(asset["path"]).exists()
-        assert captured == {
-            "model": mcp_server.OPENAI_IMAGE_MODEL,
-            "prompt": "draw a workflow",
-            "size": "1024x1024",
-        }
+        assert captured["model"] == mcp_server.OPENAI_IMAGE_MODEL
+        assert captured["size"] == "1024x1024"
+        assert captured["prompt"].startswith("draw a workflow")
+        assert "spelled correctly" in captured["prompt"]
 
 
 class TestQAOrchestratorHelpers:
@@ -304,6 +324,44 @@ class TestQAOrchestratorHelpers:
 
         assert _needs_evidence("What evidence supports the main claim?") is True
         assert _needs_evidence("Give me a 2 sentence summary.") is False
+
+    def test_continuation_detection_for_previous_answer_transforms(self):
+        from app.qa.orchestrator import _is_continuation_request, _needs_graphic
+
+        assert _is_continuation_request("Now make your previous answer a PDF.") is True
+        assert _is_continuation_request("Make that an image.") is True
+        assert _needs_graphic("Make that an image.") is True
+        assert _is_continuation_request("What are the key findings?") is False
+
+    def test_latest_context_answer_prefers_most_recent_answer(self):
+        from app.qa.orchestrator import _latest_context_answer
+
+        context = {
+            "recent_turns": [
+                {"question": "old", "answer": "Old answer", "citations": []},
+                {"question": "new", "answer": "New answer", "citations": [{"page": 2}]},
+            ]
+        }
+
+        latest = _latest_context_answer(context)
+        assert latest["answer"] == "New answer"
+        assert latest["citations"] == [{"page": 2}]
+
+    def test_memory_query_answers_last_question_from_recent_turns(self):
+        from app.qa.orchestrator import _answer_memory_query
+
+        context = {
+            "recent_turns": [
+                {"question": "Who is the author?", "answer": "The author is Ada.", "citations": []},
+            ]
+        }
+
+        assert _answer_memory_query("What was the last question?", context) == 'Your last question was: "Who is the author?"'
+
+    def test_memory_query_handles_empty_thread(self):
+        from app.qa.orchestrator import _answer_memory_query
+
+        assert _answer_memory_query("What was the last question?", {"recent_turns": []}) == "I do not have a previous question in this Q/A thread yet."
 
     def test_planner_tool_catalog_excludes_asset_tools(self):
         from app.qa.orchestrator import _planner_tool_catalog
@@ -327,6 +385,36 @@ class TestQAOrchestratorHelpers:
 
         assert _tool_error_message(_Raw(), {"error": "bad request"}) == "bad request"
         assert _tool_error_message(_Raw(), {"text": "tool failed"}) == "tool failed"
+
+    def test_synthesis_trace_for_graphic_request_does_not_claim_missing_capability(self):
+        from app.qa.orchestrator import _synthesis_trace
+
+        trace = _synthesis_trace(
+            "Make that an image.",
+            "The previous answer explains the paper workflow.",
+            [],
+            [{"tool": "retrieve_paper_chunks", "result": {"chunks": []}}],
+            graphic_requested=True,
+            requested_download_tools=[],
+        )
+
+        assert "generate a visual" in trace
+        assert "not provide" not in trace.lower()
+        assert "not found" not in trace.lower()
+
+    def test_synthesis_trace_counts_supporting_citations(self):
+        from app.qa.orchestrator import _synthesis_trace
+
+        trace = _synthesis_trace(
+            "What evidence supports this?",
+            "The paper supports the claim.",
+            [{"page": 2}, {"page": 5}],
+            [{"tool": "find_evidence", "result": {"evidence": []}}],
+            graphic_requested=False,
+            requested_download_tools=[],
+        )
+
+        assert trace == "The final answer is grounded in 2 supporting citations from the paper."
 
 
 class TestQAMcpHostDecoding:

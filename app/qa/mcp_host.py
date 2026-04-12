@@ -4,6 +4,7 @@ Async MCP host helpers for the Q/A runtime.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -71,6 +72,7 @@ async def qa_mcp_session():
         command=sys.executable,
         args=["-m", "app.qa.mcp_server"],
         cwd=_ROOT,
+        env=os.environ.copy(),
     )
     async with stdio_client(params) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:

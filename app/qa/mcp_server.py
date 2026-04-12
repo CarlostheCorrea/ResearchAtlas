@@ -43,7 +43,7 @@ server = FastMCP(
         "compares sections, creates citations, and generates downloadable answer assets."
     ),
 )
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY, timeout=120.0)
 
 
 def _ensure_runtime() -> None:
@@ -101,7 +101,6 @@ def _evidence_from_chunks(arxiv_id: str, query: str, chunks: list[dict], max_ite
             "page": chunk.get("page", 1),
             "section": chunk.get("section", "Unknown"),
             "quote": quote,
-            "match_text": quote,
             "source_chunk": chunk.get("text", "")[:800],
         })
         if len(evidence) >= max_items:
@@ -461,6 +460,45 @@ def create_pdf(session_id: str, title: str, question: str, answer: str, citation
 def create_graphic(session_id: str, prompt: str, title: str = "Generated Graphic") -> str:
     ensure_session_dir(session_id)
     asset = record_asset(session_id, "graphic.png", "image", title)
+
+    # Always emphasise correct spelling in the prompt
+    base_prompt = (
+        f"{prompt}\n\n"
+        "IMPORTANT: Every word of text rendered in the image must be spelled correctly. "
+        "Use simple, common English words only. Double-check all labels before rendering."
+    )
+
+    image_bytes = _generate_image_bytes(base_prompt, asset)
+    asset["revised_prompt"] = asset.get("revised_prompt")
+
+    # Validate text via GPT-4o vision; retry once if misspellings are found
+    retries = 0
+    corrections: list[str] = []
+    for _attempt in range(1):
+        misspellings = _validate_image_text(image_bytes)
+        if not misspellings:
+            break
+        corrections.extend(misspellings)
+        retries += 1
+        correction_hint = "; ".join(misspellings)
+        retry_prompt = (
+            f"{base_prompt}\n\n"
+            f"Previous version contained spelling errors: {correction_hint}. "
+            "Regenerate with all text spelled correctly."
+        )
+        image_bytes = _generate_image_bytes(retry_prompt, asset)
+
+    Path(asset["path"]).write_bytes(image_bytes)
+    asset["validation"] = {
+        "retries": retries,
+        "corrections": corrections,
+        "ok": retries == 0,
+    }
+    return _json(asset)
+
+
+def _generate_image_bytes(prompt: str, asset: dict) -> bytes:
+    """Call the image API and return raw PNG bytes."""
     try:
         response = client.images.generate(
             model=OPENAI_IMAGE_MODEL,
@@ -477,18 +515,57 @@ def create_graphic(session_id: str, prompt: str, title: str = "Generated Graphic
         raise ToolError("Image generation returned no image data.")
 
     image = response.data[0]
+    asset["revised_prompt"] = getattr(image, "revised_prompt", None)
+
     if getattr(image, "b64_json", None):
-        image_bytes = base64.b64decode(image.b64_json)
-        Path(asset["path"]).write_bytes(image_bytes)
-    elif getattr(image, "url", None):
+        return base64.b64decode(image.b64_json)
+    if getattr(image, "url", None):
         downloaded = httpx.get(image.url, timeout=60.0)
         downloaded.raise_for_status()
-        Path(asset["path"]).write_bytes(downloaded.content)
-    else:
-        raise ToolError("Image generation returned neither b64_json nor a URL.")
+        return downloaded.content
+    raise ToolError("Image generation returned neither b64_json nor a URL.")
 
-    asset["revised_prompt"] = getattr(image, "revised_prompt", None)
-    return _json(asset)
+
+def _validate_image_text(image_bytes: bytes) -> list[str]:
+    """Use GPT-4o vision to detect misspelled words in the image.
+
+    Returns a list of correction strings like ``"wildlif -> wildlife"`` or an
+    empty list if everything looks correct.
+    """
+    b64 = base64.b64encode(image_bytes).decode()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "List every word or phrase of text visible in this image, exactly as written. "
+                                "Then identify any misspelled English words. "
+                                "Reply ONLY as JSON: "
+                                "{\"misspellings\": [\"wrong -> correct\", ...]}. "
+                                "If there are no misspellings return {\"misspellings\": []}."
+                            ),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{b64}"},
+                        },
+                    ],
+                }
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=300,
+        )
+        content = response.choices[0].message.content or "{}"
+        data = json.loads(content)
+        return data.get("misspellings", [])
+    except Exception:
+        # Validation is best-effort; never block image delivery
+        return []
 
 
 @server.resource(

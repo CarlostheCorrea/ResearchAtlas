@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ResearchAtlas — Multi-Agent Workflow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+  }
+  body {
+    background: #FAFAF7;
+    font-family: 'Inter', sans-serif;
+    padding: 18px 24px 10px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  h1 {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: #1A1916;
+    margin-bottom: 2px;
+    letter-spacing: -0.3px;
+    flex-shrink: 0;
+  }
+  .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #999;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  .header-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+  .dl-btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: #2E5BBA;
+    background: #EEF2FF;
+    border: 1px solid #B8C8EE;
+    border-radius: 6px;
+    padding: 5px 13px;
+    cursor: pointer;
+    letter-spacing: 0.1px;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .dl-btn:hover { background: #D8E4FF; border-color: #2E5BBA; }
+  .svg-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .svg-wrap svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<div class="header-row">
+  <h1>ResearchAtlas</h1>
+  <button class="dl-btn" id="dl-btn">↓ Download PNG</button>
+</div>
+<p class="subtitle">Multi-Agent Workflow &nbsp;·&nbsp; LangGraph + MCP</p>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 1120 840" xmlns="http://www.w3.org/2000/svg"
+     preserveAspectRatio="xMidYMid meet"
+     style="font-family:'Inter',sans-serif;">
+
+  <defs>
+    <marker id="arr"      markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#999" /></marker>
+    <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#2E5BBA"/></marker>
+    <marker id="arr-amb"  markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#C08000"/></marker>
+    <marker id="arr-pur"  markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#7A5DC0"/></marker>
+  </defs>
+
+  <!-- ═══ SWIMLANE BACKGROUNDS ═══ -->
+  <rect x="10"   y="34" width="148" height="758" rx="8" fill="#F2F2EF" stroke="#DDD9D0" stroke-width="1"/>
+  <rect x="166"  y="34" width="376" height="758" rx="8" fill="#F8F8F5" stroke="#DDD9D0" stroke-width="1"/>
+  <rect x="550"  y="34" width="156" height="758" rx="8" fill="#EEF2FF" stroke="#B8C8EE" stroke-width="1"/>
+  <rect x="714"  y="34" width="192" height="758" rx="8" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1"/>
+  <rect x="914"  y="34" width="194" height="758" rx="8" fill="#F4F0FF" stroke="#C8B0EE" stroke-width="1"/>
+
+  <!-- Lane headers -->
+  <text x="84"  y="55" text-anchor="middle" font-size="9" font-weight="600" fill="#999" letter-spacing="1" font-family="Inter">USER / API</text>
+  <text x="354" y="55" text-anchor="middle" font-size="9" font-weight="600" fill="#777" letter-spacing="1" font-family="Inter">LANGGRAPH AGENTS</text>
+  <text x="628" y="55" text-anchor="middle" font-size="9" font-weight="600" fill="#2E5BBA" letter-spacing="1" font-family="Inter">MCP SERVER</text>
+  <text x="810" y="55" text-anchor="middle" font-size="9" font-weight="600" fill="#2A6A2A" letter-spacing="1" font-family="Inter">OPENAI</text>
+  <text x="1011" y="55" text-anchor="middle" font-size="9" font-weight="600" fill="#5A2DA0" letter-spacing="1" font-family="Inter">STORAGE</text>
+
+  <!-- ═══ USER / API NODES ═══ -->
+  <!-- POST /api/chat -->
+  <rect x="22" y="76" width="124" height="34" rx="17" fill="#1A1916"/>
+  <text x="84" y="98" text-anchor="middle" font-size="11" font-weight="500" fill="#FAFAF7">POST /api/chat</text>
+
+  <!-- POST /api/qa -->
+  <rect x="22" y="618" width="124" height="34" rx="17" fill="#1A1916"/>
+  <text x="84" y="640" text-anchor="middle" font-size="11" font-weight="500" fill="#FAFAF7">POST /api/qa</text>
+
+  <!-- ═══ MANAGER ═══ -->
+  <rect x="178" y="68" width="148" height="50" rx="8" fill="#2E5BBA"/>
+  <text x="252" y="89" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">Manager Agent</text>
+  <text x="252" y="106" text-anchor="middle" font-size="10" fill="#BDD0FF">intent classification</text>
+
+  <!-- ═══ DISCOVER BRANCH ═══ -->
+  <rect x="178" y="196" width="148" height="44" rx="8" fill="#fff" stroke="#C8C4BB" stroke-width="1.5"/>
+  <text x="252" y="214" text-anchor="middle" font-size="11" font-weight="500" fill="#1A1916">Search Agent</text>
+  <text x="252" y="229" text-anchor="middle" font-size="10" fill="#888">search_papers via MCP</text>
+
+  <rect x="178" y="260" width="148" height="44" rx="8" fill="#fff" stroke="#C8C4BB" stroke-width="1.5"/>
+  <text x="252" y="278" text-anchor="middle" font-size="11" font-weight="500" fill="#1A1916">Pre-Filter</text>
+  <text x="252" y="293" text-anchor="middle" font-size="10" fill="#888">year · category · keyword</text>
+
+  <rect x="178" y="324" width="148" height="44" rx="8" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1.5"/>
+  <text x="252" y="342" text-anchor="middle" font-size="11" font-weight="500" fill="#1A4A1A">Ranking Agent</text>
+  <text x="252" y="357" text-anchor="middle" font-size="10" fill="#4A8A4A">relevance · recency · prefs</text>
+
+  <rect x="212" y="390" width="80" height="26" rx="13" fill="#1A1916"/>
+  <text x="252" y="408" text-anchor="middle" font-size="10" fill="#FAFAF7">Results</text>
+
+  <!-- ═══ ANALYZE BRANCH ═══ -->
+  <!-- Human Gate 1 -->
+  <rect x="356" y="180" width="148" height="50" rx="8" fill="#FFF8EC" stroke="#E8C060" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="430" y="200" text-anchor="middle" font-size="11" font-weight="500" fill="#9A6B00">⏸ Human Gate</text>
+  <text x="430" y="216" text-anchor="middle" font-size="10" fill="#B08000">before download</text>
+
+  <rect x="356" y="254" width="148" height="50" rx="8" fill="#fff" stroke="#C8C4BB" stroke-width="1.5"/>
+  <text x="430" y="274" text-anchor="middle" font-size="11" font-weight="500" fill="#1A1916">Ingestion Agent</text>
+  <text x="430" y="290" text-anchor="middle" font-size="10" fill="#888">download · extract · chunk · index</text>
+
+  <rect x="356" y="328" width="148" height="50" rx="8" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1.5"/>
+  <text x="430" y="348" text-anchor="middle" font-size="11" font-weight="500" fill="#1A4A1A">Summary Agent</text>
+  <text x="430" y="364" text-anchor="middle" font-size="10" fill="#4A8A4A">structured summary · LLM</text>
+
+  <!-- Human Gate 2 -->
+  <rect x="356" y="402" width="148" height="50" rx="8" fill="#FFF8EC" stroke="#E8C060" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="430" y="422" text-anchor="middle" font-size="11" font-weight="500" fill="#9A6B00">⏸ Human Gate</text>
+  <text x="430" y="438" text-anchor="middle" font-size="10" fill="#B08000">approve · reject · revise</text>
+
+  <rect x="356" y="478" width="148" height="44" rx="8" fill="#fff" stroke="#C8C4BB" stroke-width="1.5"/>
+  <text x="430" y="496" text-anchor="middle" font-size="11" font-weight="500" fill="#1A1916">Memory Agent</text>
+  <text x="430" y="511" text-anchor="middle" font-size="10" fill="#888">save_to_library</text>
+
+  <rect x="390" y="544" width="80" height="26" rx="13" fill="#1A1916"/>
+  <text x="430" y="562" text-anchor="middle" font-size="10" fill="#FAFAF7">Saved ✓</text>
+
+  <!-- ═══ Q&A BRANCH (LangGraph) ═══ -->
+  <rect x="178" y="440" width="148" height="44" rx="8" fill="#fff" stroke="#C8C4BB" stroke-width="1.5"/>
+  <text x="252" y="458" text-anchor="middle" font-size="11" font-weight="500" fill="#1A1916">Retrieval Agent</text>
+  <text x="252" y="473" text-anchor="middle" font-size="10" fill="#888">retrieve_chunks via MCP</text>
+
+  <rect x="178" y="504" width="148" height="44" rx="8" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1.5"/>
+  <text x="252" y="522" text-anchor="middle" font-size="11" font-weight="500" fill="#1A4A1A">QA Agent</text>
+  <text x="252" y="537" text-anchor="middle" font-size="10" fill="#4A8A4A">grounded answer · LLM</text>
+
+  <!-- ═══ Q/A ORCHESTRATOR (/api/qa) ═══ -->
+  <rect x="170" y="620" width="360" height="130" rx="8" fill="#FDFCFA" stroke="#B8C8EE" stroke-width="1.5"/>
+  <text x="350" y="642" text-anchor="middle" font-size="12" font-weight="600" fill="#2E5BBA">Q/A Orchestrator  (/api/qa)</text>
+
+  <rect x="182" y="652" width="156" height="24" rx="4" fill="#EEF2FF" stroke="#B8C8EE" stroke-width="1"/>
+  <text x="260" y="668" text-anchor="middle" font-size="10" fill="#2E5BBA">MCP ClientSession (stdio)</text>
+
+  <rect x="346" y="652" width="172" height="24" rx="4" fill="#EEF2FF" stroke="#B8C8EE" stroke-width="1"/>
+  <text x="432" y="668" text-anchor="middle" font-size="10" fill="#2E5BBA">list_tools · read_resource</text>
+
+  <rect x="182" y="684" width="156" height="24" rx="4" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1"/>
+  <text x="260" y="700" text-anchor="middle" font-size="10" fill="#2A6A2A">Planner LLM loop</text>
+
+  <rect x="346" y="684" width="172" height="24" rx="4" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1"/>
+  <text x="432" y="700" text-anchor="middle" font-size="10" fill="#2A6A2A">Synthesis LLM</text>
+
+  <rect x="182" y="716" width="336" height="24" rx="4" fill="#F5F0FF" stroke="#C8B0EE" stroke-width="1"/>
+  <text x="350" y="732" text-anchor="middle" font-size="10" fill="#5A2DA0">assets: markdown · pdf · image  ·  evidence  ·  tool timeline</text>
+
+  <!-- ═══ MCP SERVER TOOLS ═══ -->
+  <!-- arXiv -->
+  <rect x="562" y="68" width="132" height="16" rx="3" fill="#2E5BBA" opacity="0.15"/>
+  <text x="568" y="80" font-size="9" font-weight="600" fill="#2E5BBA" letter-spacing="0.5">ARXIV TOOLS</text>
+  <rect x="562" y="88" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="102" font-size="9" font-family="JetBrains Mono" fill="#333">search_papers</text>
+  <rect x="562" y="112" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="126" font-size="9" font-family="JetBrains Mono" fill="#333">get_paper_metadata</text>
+
+  <!-- PDF -->
+  <rect x="562" y="140" width="132" height="16" rx="3" fill="#2E5BBA" opacity="0.15"/>
+  <text x="568" y="152" font-size="9" font-weight="600" fill="#2E5BBA" letter-spacing="0.5">PDF TOOLS</text>
+  <rect x="562" y="160" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="174" font-size="9" font-family="JetBrains Mono" fill="#333">download_pdf</text>
+  <rect x="562" y="184" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="198" font-size="9" font-family="JetBrains Mono" fill="#333">extract_pdf_text</text>
+  <rect x="562" y="208" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="222" font-size="9" font-family="JetBrains Mono" fill="#333">chunk_paper</text>
+
+  <!-- RAG -->
+  <rect x="562" y="236" width="132" height="16" rx="3" fill="#2E5BBA" opacity="0.15"/>
+  <text x="568" y="248" font-size="9" font-weight="600" fill="#2E5BBA" letter-spacing="0.5">RAG TOOLS</text>
+  <rect x="562" y="256" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="270" font-size="9" font-family="JetBrains Mono" fill="#333">index_paper</text>
+  <rect x="562" y="280" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="294" font-size="9" font-family="JetBrains Mono" fill="#333">retrieve_chunks</text>
+  <rect x="562" y="304" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="318" font-size="9" font-family="JetBrains Mono" fill="#333">find_evidence</text>
+
+  <!-- Q/A Tools -->
+  <rect x="562" y="332" width="132" height="16" rx="3" fill="#2E5BBA" opacity="0.15"/>
+  <text x="568" y="344" font-size="9" font-weight="600" fill="#2E5BBA" letter-spacing="0.5">Q/A TOOLS</text>
+  <rect x="562" y="352" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="366" font-size="9" font-family="JetBrains Mono" fill="#333">ensure_paper_context</text>
+  <rect x="562" y="376" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="390" font-size="9" font-family="JetBrains Mono" fill="#333">compare_sections</text>
+  <rect x="562" y="400" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="414" font-size="9" font-family="JetBrains Mono" fill="#333">create_md / create_pdf</text>
+  <rect x="562" y="424" width="132" height="20" rx="3" fill="#fff" stroke="#D0D8F0" stroke-width="1"/>
+  <text x="570" y="438" font-size="9" font-family="JetBrains Mono" fill="#333">create_graphic</text>
+
+  <!-- Resources -->
+  <rect x="562" y="452" width="132" height="16" rx="3" fill="#5A2DA0" opacity="0.12"/>
+  <text x="568" y="464" font-size="9" font-weight="600" fill="#5A2DA0" letter-spacing="0.5">RESOURCES</text>
+  <rect x="562" y="472" width="132" height="36" rx="3" fill="#fff" stroke="#C8B0EE" stroke-width="1"/>
+  <text x="570" y="486" font-size="8.5" font-family="JetBrains Mono" fill="#5A2DA0">researchatlas://paper/</text>
+  <text x="570" y="500" font-size="8.5" font-family="JetBrains Mono" fill="#5A2DA0">{id}/metadata · abstract</text>
+
+  <!-- FastMCP label -->
+  <rect x="562" y="516" width="132" height="26" rx="13" fill="#2E5BBA"/>
+  <text x="628" y="534" text-anchor="middle" font-size="10" font-weight="600" fill="#fff">FastMCP  ·  stdio</text>
+
+  <!-- ═══ OPENAI LANE ═══ -->
+  <rect x="724" y="68" width="172" height="56" rx="8" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1.5"/>
+  <text x="810" y="89" text-anchor="middle" font-size="11" font-weight="600" fill="#1A4A1A">OpenAI GPT-4o</text>
+  <text x="810" y="107" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#4A8A4A">intent · ranking · summary</text>
+  <text x="810" y="120" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#4A8A4A">planner · synthesis</text>
+
+  <rect x="724" y="140" width="172" height="44" rx="8" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1.5"/>
+  <text x="810" y="158" text-anchor="middle" font-size="11" font-weight="600" fill="#1A4A1A">OpenAI Images</text>
+  <text x="810" y="174" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#4A8A4A">create_graphic tool</text>
+
+  <!-- ═══ STORAGE LANE ═══ -->
+  <rect x="924" y="68" width="172" height="108" rx="8" fill="#F4F0FF" stroke="#C8B0EE" stroke-width="1.5"/>
+  <text x="1010" y="89" text-anchor="middle" font-size="11" font-weight="600" fill="#5A2DA0">SQLite</text>
+  <text x="1010" y="107" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#7A5DC0">saved_papers · chunks</text>
+  <text x="1010" y="121" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#7A5DC0">pdf_cache · preferences</text>
+  <text x="1010" y="135" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#7A5DC0">feedback · reviews</text>
+  <text x="1010" y="149" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#7A5DC0">LangGraph checkpoints</text>
+  <text x="1010" y="165" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#7A5DC0">qa_assets session files</text>
+
+  <rect x="924" y="190" width="172" height="60" rx="8" fill="#F4F0FF" stroke="#C8B0EE" stroke-width="1.5"/>
+  <text x="1010" y="211" text-anchor="middle" font-size="11" font-weight="600" fill="#5A2DA0">ChromaDB</text>
+  <text x="1010" y="229" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#7A5DC0">vector embeddings</text>
+  <text x="1010" y="245" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#7A5DC0">sentence-transformers</text>
+
+  <rect x="924" y="264" width="172" height="44" rx="8" fill="#F4F0FF" stroke="#C8B0EE" stroke-width="1.5"/>
+  <text x="1010" y="283" text-anchor="middle" font-size="11" font-weight="600" fill="#5A2DA0">Filesystem</text>
+  <text x="1010" y="299" text-anchor="middle" font-size="9" font-family="JetBrains Mono" fill="#7A5DC0">data/pdfs/  ·  qa_assets/</text>
+
+  <!-- ═══ ARROWS ═══ -->
+
+  <!-- User → Manager -->
+  <line x1="146" y1="93" x2="178" y2="93" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Manager down to discover fork -->
+  <line x1="252" y1="118" x2="252" y2="196" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="258" y="162" font-size="9" fill="#888" font-style="italic">discover</text>
+
+  <!-- Manager right then down to Human Gate 1 -->
+  <line x1="326" y1="93" x2="356" y2="93" stroke="#999" stroke-width="1.5"/>
+  <line x1="356" y1="93" x2="356" y2="180" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="332" y="86" font-size="9" fill="#888" font-style="italic">analyze</text>
+
+  <!-- Manager right to ask (indexed) — goes via a bend -->
+  <line x1="326" y1="118" x2="350" y2="118" stroke="#999" stroke-width="1.5"/>
+  <line x1="350" y1="118" x2="350" y2="460" stroke="#999" stroke-width="1.5"/>
+  <line x1="350" y1="460" x2="326" y2="460" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="354" y="290" font-size="9" fill="#888" font-style="italic" transform="rotate(-90,354,290)">ask (indexed)</text>
+
+  <!-- Discover chain -->
+  <line x1="252" y1="240" x2="252" y2="260" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="252" y1="304" x2="252" y2="324" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="252" y1="368" x2="252" y2="390" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Analyze chain -->
+  <line x1="430" y1="230" x2="430" y2="254" stroke="#C08000" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-amb)"/>
+  <text x="436" y="246" font-size="9" fill="#C08000" font-style="italic">approved</text>
+  <line x1="430" y1="304" x2="430" y2="328" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="430" y1="378" x2="430" y2="402" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="430" y1="452" x2="430" y2="478" stroke="#C08000" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-amb)"/>
+  <text x="436" y="470" font-size="9" fill="#C08000" font-style="italic">approved</text>
+  <line x1="430" y1="522" x2="430" y2="544" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Revise loop -->
+  <line x1="504" y1="427" x2="524" y2="427" stroke="#C08000" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="524" y1="427" x2="524" y2="353" stroke="#C08000" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="524" y1="353" x2="504" y2="353" stroke="#C08000" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-amb)"/>
+  <text x="530" y="395" font-size="9" fill="#C08000" font-style="italic">revise</text>
+
+  <!-- Ask (indexed) chain -->
+  <line x1="252" y1="484" x2="252" y2="504" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- /api/qa → Orchestrator -->
+  <line x1="146" y1="635" x2="170" y2="660" stroke="#2E5BBA" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- Agents → MCP (dashed blue) -->
+  <line x1="326" y1="218" x2="562" y2="100" stroke="#2E5BBA" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-blue)" opacity="0.5"/>
+  <line x1="504" y1="280" x2="562" y2="200" stroke="#2E5BBA" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-blue)" opacity="0.5"/>
+  <line x1="504" y1="353" x2="562" y2="295" stroke="#2E5BBA" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-blue)" opacity="0.5"/>
+  <line x1="326" y1="462" x2="562" y2="270" stroke="#2E5BBA" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-blue)" opacity="0.5"/>
+  <!-- Orchestrator → MCP -->
+  <line x1="530" y1="686" x2="562" y2="490" stroke="#2E5BBA" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-blue)"/>
+  <text x="537" y="610" font-size="9" font-family="JetBrains Mono" fill="#2E5BBA">stdio</text>
+
+  <!-- Agents → OpenAI (dashed green) -->
+  <line x1="326" y1="88" x2="724" y2="88" stroke="#2A6A2A" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)" opacity="0.5"/>
+  <line x1="504" y1="348" x2="724" y2="100" stroke="#2A6A2A" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)" opacity="0.5"/>
+  <!-- Orchestrator → OpenAI -->
+  <line x1="530" y1="700" x2="724" y2="155" stroke="#2A6A2A" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)" opacity="0.7"/>
+
+  <!-- MCP → Storage -->
+  <line x1="694" y1="140" x2="924" y2="140" stroke="#7A5DC0" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arr-pur)" opacity="0.7"/>
+  <line x1="694" y1="220" x2="924" y2="220" stroke="#7A5DC0" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arr-pur)" opacity="0.7"/>
+  <line x1="694" y1="286" x2="924" y2="286" stroke="#7A5DC0" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arr-pur)" opacity="0.7"/>
+
+  <!-- ═══ GRAPHSTATE BANNER ═══ -->
+  <rect x="170" y="574" width="368" height="26" rx="5" fill="#F0EEE8" stroke="#C8C4BB" stroke-width="1"/>
+  <text x="354" y="591" text-anchor="middle" font-size="10" font-family="JetBrains Mono" fill="#666">GraphState  ·  SqliteSaver  ·  per thread_id session</text>
+
+  <!-- ═══ LEGEND ═══ -->
+  <rect x="724" y="220" width="182" height="180" rx="8" fill="#FAFAF7" stroke="#DDD9D0" stroke-width="1"/>
+  <text x="815" y="240" text-anchor="middle" font-size="9" font-weight="600" fill="#888" letter-spacing="0.5">LEGEND</text>
+
+  <rect x="734" y="250" width="14" height="14" rx="3" fill="#2E5BBA"/>
+  <text x="754" y="262" font-size="10" fill="#444">Manager / Router</text>
+
+  <rect x="734" y="272" width="14" height="14" rx="3" fill="#fff" stroke="#C8C4BB" stroke-width="1.5"/>
+  <text x="754" y="284" font-size="10" fill="#444">LangGraph Agent</text>
+
+  <rect x="734" y="294" width="14" height="14" rx="3" fill="#EDF5ED" stroke="#A8D8A8" stroke-width="1.5"/>
+  <text x="754" y="306" font-size="10" fill="#444">LLM call node</text>
+
+  <rect x="734" y="316" width="14" height="14" rx="3" fill="#FFF8EC" stroke="#E8C060" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <text x="754" y="328" font-size="10" fill="#444">Human interrupt</text>
+
+  <line x1="734" y1="344" x2="748" y2="344" stroke="#2E5BBA" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <text x="754" y="348" font-size="10" fill="#444">MCP tool call</text>
+
+  <line x1="734" y1="366" x2="748" y2="366" stroke="#2A6A2A" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <text x="754" y="370" font-size="10" fill="#444">OpenAI API call</text>
+
+  <line x1="734" y1="388" x2="748" y2="388" stroke="#C08000" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <text x="754" y="392" font-size="10" fill="#444">Human decision</text>
+
+</svg>
+</div>
+
+<script>
+document.getElementById('dl-btn').addEventListener('click', function () {
+  const svg = document.querySelector('.svg-wrap svg');
+  const scale = 2; // 2x for retina-quality PNG
+  const W = 1120 * scale;
+  const H = 840 * scale;
+
+  // Serialise SVG with explicit dimensions
+  const clone = svg.cloneNode(true);
+  clone.setAttribute('width', W);
+  clone.setAttribute('height', H);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+  // Embed background so PNG isn't transparent
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bg.setAttribute('width', '100%');
+  bg.setAttribute('height', '100%');
+  bg.setAttribute('fill', '#FAFAF7');
+  clone.insertBefore(bg, clone.firstChild);
+
+  const svgStr = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+
+  const img = new Image();
+  img.onload = function () {
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+
+    canvas.toBlob(function (blob) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'researchatlas-workflow.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, 'image/png');
+  };
+  img.src = url;
+});
+</script>
+
+</body>
+</html>
