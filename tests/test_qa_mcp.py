@@ -309,6 +309,53 @@ class TestQATools:
         assert captured["prompt"].startswith("draw a workflow")
         assert "spelled correctly" in captured["prompt"]
 
+    def test_create_presentation_writes_html_asset(self, tmp_path, monkeypatch):
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        class _Message:
+            content = json.dumps({
+                "deck_title": "Test Paper Presentation",
+                "slides": [
+                    {
+                        "title": "Main Idea",
+                        "bullets": ["The paper introduces a test idea.", "The result is useful for class discussion."],
+                        "speaker_notes": "Use this slide to explain the core contribution.",
+                    }
+                ],
+            })
+
+        class _Choice:
+            message = _Message()
+
+        class _Response:
+            choices = [_Choice()]
+
+        monkeypatch.setattr(mcp_server.client.chat.completions, "create", lambda **kwargs: _Response())
+
+        asset = json.loads(
+            mcp_server.create_presentation(
+                "sess-presentation",
+                "Test Paper",
+                "Make a one-slide presentation with speaker notes.",
+                "The paper introduces a test idea.",
+                json.dumps([{"section": "Abstract", "page": 1, "quote": "The paper introduces a test idea."}]),
+                slide_count=1,
+            )
+        )
+
+        html = Path(asset["path"]).read_text(encoding="utf-8")
+        assert asset["kind"] == "presentation"
+        assert asset["label"] == "Download Presentation"
+        assert asset["filename"] == "test-paper-presentation.html"
+        assert asset["slide_count"] == 1
+        assert "<!doctype html>" in html
+        assert "Test Paper Presentation" in html
+        assert "Speaker Notes" in html
+        assert "Abstract, p. 1" in html
+
 
 class TestQAOrchestratorHelpers:
     def test_requested_download_tools_respect_requested_format(self):
@@ -318,6 +365,21 @@ class TestQAOrchestratorHelpers:
         assert _requested_download_tools("Export this answer as PDF.") == ["create_pdf"]
         assert _requested_download_tools("Make this downloadable.") == ["create_md"]
         assert _requested_download_tools("Give me both markdown and pdf.") == ["create_md", "create_pdf"]
+        assert _requested_download_tools("Make a 3-slide class presentation.") == ["create_presentation"]
+
+    def test_presentation_options_parse_slide_count_and_audience(self):
+        from app.qa.orchestrator import _presentation_options
+
+        assert _presentation_options("Make a one-slide presentation for a general audience.") == {
+            "slide_count": 1,
+            "audience": "general",
+            "include_speaker_notes": True,
+        }
+        assert _presentation_options("Make 3 slides for a technical audience with no speaker notes.") == {
+            "slide_count": 3,
+            "audience": "technical",
+            "include_speaker_notes": False,
+        }
 
     def test_needs_evidence_only_for_evidence_requests(self):
         from app.qa.orchestrator import _needs_evidence
@@ -330,6 +392,7 @@ class TestQAOrchestratorHelpers:
 
         assert _is_continuation_request("Now make your previous answer a PDF.") is True
         assert _is_continuation_request("Make that an image.") is True
+        assert _is_continuation_request("Now make that a presentation.") is True
         assert _needs_graphic("Make that an image.") is True
         assert _is_continuation_request("What are the key findings?") is False
 
@@ -371,6 +434,7 @@ class TestQAOrchestratorHelpers:
             {"name": "create_md", "description": "md", "input_schema": {}},
             {"name": "create_pdf", "description": "pdf", "input_schema": {}},
             {"name": "create_graphic", "description": "graphic", "input_schema": {}},
+            {"name": "create_presentation", "description": "presentation", "input_schema": {}},
             {"name": "find_evidence", "description": "evidence", "input_schema": {}},
         ]
 
@@ -497,7 +561,7 @@ db.cache_paper_metadata({
 
                 tools_result = await session.list_tools()
                 tool_names = {tool.name for tool in tools_result.tools}
-                assert {"find_evidence", "create_md", "create_pdf", "create_graphic", "compare_sections", "cite_evidence"}.issubset(tool_names)
+                assert {"find_evidence", "create_md", "create_pdf", "create_graphic", "create_presentation", "compare_sections", "cite_evidence"}.issubset(tool_names)
 
                 templates = await session.list_resource_templates()
                 template_names = {tpl.uriTemplate for tpl in templates.resourceTemplates}

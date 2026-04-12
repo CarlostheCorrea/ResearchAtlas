@@ -724,7 +724,7 @@ async function clearQaAssets() {
   try {
     const result = await apiDelete('/api/qa/assets');
     showToast(`Cleared ${result.removed_sessions} Q/A asset folder${result.removed_sessions !== 1 ? 's' : ''}.`, 'success');
-    document.getElementById('qa-assets').innerHTML = 'Generated Markdown and PDF downloads will appear here.';
+    document.getElementById('qa-assets').innerHTML = 'Generated downloads will appear here.';
     document.getElementById('qa-assets').classList.add('qa-empty');
     document.getElementById('qa-graphic').innerHTML = '';
     document.getElementById('qa-graphic-panel').classList.add('hidden');
@@ -777,7 +777,7 @@ function resetQaWorkspace() {
   document.getElementById('qa-available-tools').classList.add('qa-empty');
   document.getElementById('qa-tool-timeline').innerHTML = 'Ask a question to see MCP tool usage.';
   document.getElementById('qa-tool-timeline').classList.add('qa-empty');
-  document.getElementById('qa-assets').innerHTML = 'Generated Markdown and PDF downloads will appear here.';
+  document.getElementById('qa-assets').innerHTML = 'Generated downloads will appear here.';
   document.getElementById('qa-assets').classList.add('qa-empty');
   document.getElementById('qa-evidence-list').innerHTML = 'Evidence quotes and PDF highlights will appear here.';
   document.getElementById('qa-evidence-list').classList.add('qa-empty');
@@ -843,9 +843,9 @@ function renderAvailableTools(tools) {
 
 function renderQaAssets(assets) {
   const container = document.getElementById('qa-assets');
-  const downloads = (assets || []).filter(a => a.kind === 'markdown' || a.kind === 'pdf');
+  const downloads = (assets || []).filter(a => ['markdown', 'pdf', 'presentation'].includes(a.kind));
   if (downloads.length === 0) {
-    container.innerHTML = 'Generated Markdown and PDF downloads will appear here.';
+    container.innerHTML = 'Generated downloads will appear here.';
     container.classList.add('qa-empty');
     return;
   }

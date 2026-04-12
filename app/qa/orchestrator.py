@@ -22,10 +22,13 @@ ProgressFn = Callable[[dict[str, Any]], None]
 
 def _requested_download_tools(question: str) -> list[str]:
     lowered = question.lower()
+    wants_presentation = any(token in lowered for token in ("presentation", "slide", "slides", "slide deck", "deck"))
     wants_md = any(token in lowered for token in ("markdown", ".md", " md ", "md file"))
     wants_pdf = "pdf" in lowered
     wants_download = any(token in lowered for token in ("download", "downloadable", "printable", "export", "file"))
 
+    if wants_presentation:
+        return ["create_presentation"]
     if wants_md and not wants_pdf:
         return ["create_md"]
     if wants_pdf and not wants_md:
@@ -35,6 +38,35 @@ def _requested_download_tools(question: str) -> list[str]:
     if wants_download:
         return ["create_md"]
     return []
+
+
+def _presentation_options(question: str) -> dict[str, Any]:
+    lowered = question.lower()
+    slide_count = 1 if any(token in lowered for token in ("1 slide", "one slide", "one-slide", "single slide", "one-page slide")) else 3
+    audience = "class"
+    if "general audience" in lowered or "non-technical" in lowered or "beginner" in lowered:
+        audience = "general"
+    elif "technical" in lowered or "expert" in lowered or "graduate" in lowered:
+        audience = "technical"
+    include_speaker_notes = not any(token in lowered for token in ("no speaker notes", "without speaker notes", "no notes"))
+    return {
+        "slide_count": slide_count,
+        "audience": audience,
+        "include_speaker_notes": include_speaker_notes,
+    }
+
+
+def _asset_tool_arguments(tool_name: str, session_id: str, metadata: dict[str, Any], question: str, answer: str, citations_json: str) -> dict[str, Any]:
+    arguments = {
+        "session_id": session_id,
+        "title": metadata.get("title", metadata.get("arxiv_id", "ResearchAtlas")),
+        "question": question,
+        "answer": answer,
+        "citations_json": citations_json,
+    }
+    if tool_name == "create_presentation":
+        arguments.update(_presentation_options(question))
+    return arguments
 
 
 def _needs_evidence(question: str) -> bool:
@@ -135,7 +167,7 @@ def _build_tool_catalog(tools: list[Any]) -> list[dict[str, Any]]:
 
 
 def _planner_tool_catalog(tool_catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    asset_tools = {"create_md", "create_pdf", "create_graphic"}
+    asset_tools = {"create_md", "create_pdf", "create_graphic", "create_presentation"}
     return [tool for tool in tool_catalog if tool["name"] not in asset_tools]
 
 
@@ -413,17 +445,24 @@ async def run_qa_orchestrator(session_id: str, question: str, arxiv_id: str, pro
             graphic_requested = _needs_graphic(question)
             generated_image = None
             chat_message = None
+            citations_json = json.dumps(citations, ensure_ascii=True)
 
             for tool_name in requested_download_tools:
+                _emit(
+                    timeline,
+                    progress,
+                    _timeline_entry(
+                        "tool",
+                        f"Running {tool_name}",
+                        "Creating the requested artifact from the previous answer.",
+                        tool=tool_name,
+                        status="running",
+                    ),
+                )
+                args = _asset_tool_arguments(tool_name, session_id, metadata, question, answer, citations_json)
                 raw = await session.call_tool(
                     tool_name,
-                    {
-                        "session_id": session_id,
-                        "title": metadata.get("title", arxiv_id),
-                        "question": question,
-                        "answer": answer,
-                        "citations_json": json.dumps(citations, ensure_ascii=True),
-                    },
+                    args,
                 )
                 asset = decode_tool_result(raw)
                 error_message = _tool_error_message(raw, asset)
@@ -663,15 +702,10 @@ async def run_qa_orchestrator(session_id: str, question: str, arxiv_id: str, pro
                         status="running",
                     ),
                 )
+                args = _asset_tool_arguments(tool_name, session_id, metadata, question, answer, citations_json)
                 raw = await session.call_tool(
                     tool_name,
-                    {
-                        "session_id": session_id,
-                        "title": metadata.get("title", arxiv_id),
-                        "question": question,
-                        "answer": answer,
-                        "citations_json": citations_json,
-                    },
+                    args,
                 )
                 asset = decode_tool_result(raw)
                 error_message = _tool_error_message(raw, asset)

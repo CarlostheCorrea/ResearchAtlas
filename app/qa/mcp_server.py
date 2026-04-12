@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import redirect_stdout
+import html
 import json
 import os
 import re
@@ -131,6 +132,8 @@ def _slugify(text: str, fallback: str = "document") -> str:
 
 def _export_suffix(question: str) -> str:
     lowered = (question or "").lower()
+    if any(token in lowered for token in ("presentation", "slide", "slides", "slide deck", "deck")):
+        return "presentation"
     if "workflow" in lowered:
         return "workflow"
     if any(token in lowered for token in ("summary", "summarize", "overview")):
@@ -271,6 +274,186 @@ def _write_pdf(path: Path, title: str, question: str, answer: str, citations: li
 
     doc.save(path)
     doc.close()
+
+
+def _presentation_slide_count(slide_count: int) -> int:
+    try:
+        requested = int(slide_count or 3)
+    except (TypeError, ValueError):
+        requested = 3
+    return 1 if requested <= 1 else 3
+
+
+def _fallback_presentation_outline(title: str, answer: str, citations: list[dict], slide_count: int, include_speaker_notes: bool) -> dict:
+    points = [point for point in _extract_points(answer) if point]
+    if not points:
+        points = [answer.strip() or "No answer content was available."]
+
+    if slide_count == 1:
+        slide_defs = [("Main Idea", points[:4])]
+    else:
+        slide_defs = [
+            ("Main Idea", points[:3]),
+            ("Method / Evidence", points[3:6] or points[:3]),
+            ("Why It Matters", points[6:9] or points[-3:]),
+        ]
+
+    citation_text = []
+    for item in citations[:3]:
+        section = item.get("section", "Unknown")
+        page = item.get("page", "?")
+        quote = item.get("quote", "")
+        citation_text.append(f"{section}, p. {page}: {quote}")
+
+    slides = []
+    for slide_title, bullets in slide_defs:
+        notes = " ".join(bullets)
+        if citation_text:
+            notes = f"{notes} Supporting evidence: {' '.join(citation_text)}"
+        slides.append({
+            "title": slide_title,
+            "bullets": bullets[:4],
+            "speaker_notes": notes if include_speaker_notes else "",
+        })
+    return {
+        "deck_title": title,
+        "slides": slides,
+    }
+
+
+def _llm_presentation_outline(title: str, question: str, answer: str, citations: list[dict], slide_count: int, audience: str, include_speaker_notes: bool) -> dict:
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Create a concise class presentation outline from a research Q/A answer. "
+                    "Use only the supplied answer and citations. Return strict JSON with keys "
+                    "deck_title and slides. slides must be an array of objects with title, bullets, "
+                    "and speaker_notes. Use exactly the requested slide count. Keep each slide to 3-4 bullets."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "paper_title": title,
+                        "request": question,
+                        "answer": answer,
+                        "citations": citations[:5],
+                        "slide_count": slide_count,
+                        "audience": audience,
+                        "include_speaker_notes": include_speaker_notes,
+                    },
+                    ensure_ascii=True,
+                ),
+            },
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.1,
+    )
+    outline = json.loads(response.choices[0].message.content or "{}")
+    slides = outline.get("slides")
+    if not isinstance(slides, list) or not slides:
+        raise ValueError("Presentation outline did not include slides.")
+    if len(slides) < slide_count:
+        raise ValueError("Presentation outline returned too few slides.")
+    outline["slides"] = slides[:slide_count]
+    return outline
+
+
+def _build_presentation_outline(title: str, question: str, answer: str, citations: list[dict], slide_count: int, audience: str, include_speaker_notes: bool) -> dict:
+    slide_count = _presentation_slide_count(slide_count)
+    try:
+        return _llm_presentation_outline(title, question, answer, citations, slide_count, audience, include_speaker_notes)
+    except Exception:
+        return _fallback_presentation_outline(title, answer, citations, slide_count, include_speaker_notes)
+
+
+def _render_presentation_html(title: str, question: str, outline: dict, citations: list[dict], include_speaker_notes: bool) -> str:
+    deck_title = html.escape(str(outline.get("deck_title") or title))
+    slides = outline.get("slides", [])
+    slide_html = []
+    for index, slide in enumerate(slides, start=1):
+        slide_title = html.escape(str(slide.get("title") or f"Slide {index}"))
+        bullets = slide.get("bullets") or []
+        if isinstance(bullets, str):
+            bullets = [bullets]
+        bullet_html = "\n".join(f"<li>{html.escape(str(bullet))}</li>" for bullet in bullets[:5])
+        notes = html.escape(str(slide.get("speaker_notes") or ""))
+        notes_html = (
+            f"<aside class=\"speaker-notes\"><h3>Speaker Notes</h3><p>{notes}</p></aside>"
+            if include_speaker_notes and notes
+            else ""
+        )
+        slide_html.append(
+            f"""
+      <section class="slide">
+        <div class="slide-kicker">ResearchAtlas slide {index}</div>
+        <h2>{slide_title}</h2>
+        <ul>
+          {bullet_html}
+        </ul>
+        {notes_html}
+      </section>"""
+        )
+
+    citation_items = []
+    for item in citations[:5]:
+        section = html.escape(str(item.get("section", "Unknown")))
+        page = html.escape(str(item.get("page", "?")))
+        quote = html.escape(str(item.get("quote", "")).strip())
+        citation_items.append(f"<li><strong>{section}, p. {page}</strong>: {quote}</li>")
+    citations_html = f"<section class=\"citations\"><h2>Citations</h2><ol>{''.join(citation_items)}</ol></section>" if citation_items else ""
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{deck_title}</title>
+  <style>
+    :root {{ --ink: #171717; --muted: #666; --paper: #fbfaf5; --accent: #315fbd; --line: #ded9cc; }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; background: var(--paper); color: var(--ink); font-family: Georgia, "Times New Roman", serif; }}
+    main {{ max-width: 1040px; margin: 0 auto; padding: 40px 28px 64px; }}
+    header {{ border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 28px; }}
+    h1 {{ font-size: clamp(32px, 5vw, 56px); line-height: 1.02; margin: 0 0 12px; letter-spacing: -0.04em; }}
+    .subtitle {{ color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: 0.14em; }}
+    .question {{ margin-top: 14px; color: var(--muted); font-size: 15px; }}
+    .slide {{ min-height: 560px; border: 1px solid var(--line); background: #fffdf8; border-radius: 18px; padding: 42px; margin: 28px 0; page-break-after: always; box-shadow: 0 16px 44px rgba(0,0,0,0.08); }}
+    .slide-kicker {{ color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.18em; margin-bottom: 16px; }}
+    h2 {{ font-size: clamp(28px, 4vw, 44px); line-height: 1.08; margin: 0 0 28px; letter-spacing: -0.03em; }}
+    ul {{ font-size: 25px; line-height: 1.35; padding-left: 30px; margin: 0; }}
+    li {{ margin: 0 0 18px; }}
+    .speaker-notes {{ margin-top: 36px; border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 16px; line-height: 1.55; }}
+    .speaker-notes h3 {{ color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.16em; margin: 0 0 8px; }}
+    .speaker-notes p {{ margin: 0; }}
+    .citations {{ border: 1px solid var(--line); border-radius: 14px; padding: 24px; background: #fffdf8; color: var(--muted); }}
+    .citations h2 {{ font-size: 22px; margin-bottom: 14px; }}
+    .citations li {{ font-size: 14px; line-height: 1.45; margin-bottom: 10px; }}
+    @media print {{
+      body {{ background: white; }}
+      main {{ padding: 0; max-width: none; }}
+      header {{ padding: 24px; }}
+      .slide {{ min-height: 7.5in; margin: 0; border-radius: 0; box-shadow: none; border: 0; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="subtitle">ResearchAtlas Presentation</div>
+      <h1>{deck_title}</h1>
+      <div class="question">{html.escape(question)}</div>
+    </header>
+    {"".join(slide_html)}
+    {citations_html}
+  </main>
+</body>
+</html>
+"""
 
 
 def _llm_compare(arxiv_id: str, section_a: str, section_b: str, content_a: str, content_b: str, focus: str | None) -> dict:
@@ -447,6 +630,36 @@ def create_pdf(session_id: str, title: str, question: str, answer: str, citation
     asset = record_asset(session_id, filename, "pdf", "Download PDF")
     citations = json.loads(citations_json or "[]")
     _write_pdf(Path(asset["path"]), title, question, answer, citations)
+    return _json(asset)
+
+
+@server.tool(
+    name="create_presentation",
+    description=(
+        "Create a downloadable self-contained HTML presentation from the current Q/A response. "
+        "Use this when the user asks for slides, a slide deck, or a class presentation."
+    ),
+)
+def create_presentation(
+    session_id: str,
+    title: str,
+    question: str,
+    answer: str,
+    citations_json: str = "[]",
+    slide_count: int = 3,
+    audience: str = "class",
+    include_speaker_notes: bool = True,
+) -> str:
+    ensure_session_dir(session_id)
+    filename = _export_filename(title, question, "html")
+    asset = record_asset(session_id, filename, "presentation", "Download Presentation")
+    citations = json.loads(citations_json or "[]")
+    slide_count = _presentation_slide_count(slide_count)
+    outline = _build_presentation_outline(title, question, answer, citations, slide_count, audience, include_speaker_notes)
+    html_doc = _render_presentation_html(title, question, outline, citations, include_speaker_notes)
+    Path(asset["path"]).write_text(html_doc, encoding="utf-8")
+    asset["slide_count"] = slide_count
+    asset["format"] = "html"
     return _json(asset)
 
 

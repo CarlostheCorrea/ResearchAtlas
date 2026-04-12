@@ -89,9 +89,10 @@ Rules:
 3. Prefer find_evidence or cite_evidence only when the user explicitly asks for claims, proof, support, evidence, citations, quotes, or highlighted source text.
 4. Prefer compare_sections only when the user asks to compare parts of the same paper.
 5. If the paper is not ready for evidence lookup, use ensure_paper_context first.
-6. Do not invent tool names or arguments.
-7. Stop once there is enough information to produce a grounded answer.
-8. Include a short user-facing rationale. This is a decision trace, not private chain-of-thought.
+6. For slide or presentation requests, retrieve enough paper context for the answer; downloadable presentation creation is handled after synthesis.
+7. Do not invent tool names or arguments.
+8. Stop once there is enough information to produce a grounded answer.
+9. Include a short user-facing rationale. This is a decision trace, not private chain-of-thought.
 
 Return ONLY valid JSON in one of these shapes:
 {"action":"tool","tool":"<tool_name>","arguments":{...},"reason":"<brief reason>","rationale":"<1-2 sentence user-facing explanation of why this tool is useful now>"}
