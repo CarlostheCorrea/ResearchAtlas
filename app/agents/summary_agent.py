@@ -16,8 +16,23 @@ from app.qa.summary_evaluation import evaluate_summary
 # 90-second timeout — gpt-4o with a large context can take 30-60 s
 client = OpenAI(api_key=OPENAI_API_KEY, timeout=90.0)
 
-# Max characters of chunk context to send — prevents overly large prompts
-_MAX_CONTEXT_CHARS = 12_000
+# Max characters of chunk context to send — gpt-4o handles 128k tokens;
+# 24k chars gives ~6k tokens of context, well within limits.
+_MAX_CONTEXT_CHARS = 24_000
+
+# Targeted semantic queries for each summary section.
+# These run as separate retrieve_paper_chunks calls so even sections buried
+# deep in a long PDF (datasets, results, limitations) get their own chunks.
+_SECTION_QUERIES: dict[str, str] = {
+    "overview":            "overview introduction abstract background motivation",
+    "problem_addressed":   "problem challenge gap limitation existing work prior methods",
+    "main_contribution":   "contribution novelty proposed key insight innovation",
+    "method":              "methodology method approach architecture algorithm framework design",
+    "datasets_experiments":"dataset experiment benchmark evaluation setup training testing data",
+    "results":             "results performance accuracy findings improvement comparison baseline",
+    "limitations":         "limitations future work drawbacks constraints failure cases scope",
+    "why_it_matters":      "impact significance applications real-world deployment broader impact",
+}
 
 
 def run_summary_agent(state: dict) -> dict:
@@ -27,7 +42,7 @@ def run_summary_agent(state: dict) -> dict:
     if not arxiv_id:
         return {"error": "summary_agent: selected_arxiv_id is missing from state"}
 
-    # Retrieve representative chunks from each major section
+    # ── Pass 1: section-label retrieval (fast, works when chunker labels match) ──
     sections_to_cover = ["introduction", "method", "results", "conclusion", "limitations"]
     all_chunks = []
     for section in sections_to_cover:
@@ -37,12 +52,30 @@ def run_summary_agent(state: dict) -> dict:
         })
         all_chunks.extend(chunk_result.get("chunks", [])[:2])
 
-    # Also retrieve chunks most relevant to the paper's own title
+    # ── Pass 2: section-targeted semantic retrieval ───────────────────────────
+    # One dedicated retrieve_paper_chunks call per summary section so that
+    # unlabeled or deeply-buried sections (datasets, results, limitations in a
+    # 177-page paper) still surface relevant chunks via embedding similarity.
     metadata = mcp.call_tool("get_paper_metadata", {"arxiv_id": arxiv_id})
     # MCP may return an error dict or None — normalise to empty dict
     if not isinstance(metadata, dict) or "error" in metadata:
         metadata = {}
 
+    for section_key, query in _SECTION_QUERIES.items():
+        targeted_chunks = mcp.call_tool("retrieve_paper_chunks", {
+            "arxiv_id": arxiv_id,
+            "question": query,
+            "k": 3,
+        })
+        if isinstance(targeted_chunks, list):
+            # Tag each chunk with which summary section it was fetched for
+            for c in targeted_chunks:
+                c["_for_section"] = section_key
+            all_chunks.extend(targeted_chunks)
+        print(f"[summary_agent] Section '{section_key}': "
+              f"{len(targeted_chunks) if isinstance(targeted_chunks, list) else 0} chunks")
+
+    # ── Pass 3: title-relevance retrieval (anchors the overview) ─────────────
     title_chunks = mcp.call_tool("retrieve_paper_chunks", {
         "arxiv_id": arxiv_id,
         "question": metadata.get("title", arxiv_id),
@@ -51,8 +84,8 @@ def run_summary_agent(state: dict) -> dict:
     if isinstance(title_chunks, list):
         all_chunks.extend(title_chunks)
 
-    # Deduplicate by chunk_id
-    seen = set()
+    # Deduplicate by chunk_id (keep first occurrence — earlier passes are more reliable)
+    seen: set[str] = set()
     unique_chunks = []
     for c in all_chunks:
         cid = c.get("chunk_id", "")
@@ -60,11 +93,17 @@ def run_summary_agent(state: dict) -> dict:
             seen.add(cid)
             unique_chunks.append(c)
 
-    # Build context string with section labels — cap total size to avoid huge prompts
-    context_parts = [
-        f"[{c.get('section', 'UNKNOWN').upper()}]\n{c.get('text', '')}"
-        for c in unique_chunks
-    ]
+    print(f"[summary_agent] {len(unique_chunks)} unique chunks collected across all retrieval passes")
+
+    # Build context string — label each chunk with both its structural section
+    # (from chunker metadata) and the summary section it was fetched for.
+    context_parts = []
+    for c in unique_chunks:
+        structural = c.get("section", "UNKNOWN").upper()
+        for_section = c.get("_for_section", "").upper()
+        label = f"[{structural}]" if not for_section else f"[{structural} → for:{for_section}]"
+        context_parts.append(f"{label}\n{c.get('text', '')}")
+
     context = "\n\n".join(context_parts)
     if len(context) > _MAX_CONTEXT_CHARS:
         context = context[:_MAX_CONTEXT_CHARS] + "\n\n[...context truncated for length...]"

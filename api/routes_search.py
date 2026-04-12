@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter
 from app.schemas import SearchRequest
 from app.graph.build_graph import get_graph
+from app.agents.coauthor_graph import build_coauthor_graph
 
 router = APIRouter()
 
@@ -32,6 +33,7 @@ async def search_papers(request: SearchRequest):
         "year_from": request.year_from,
         "required_categories": request.categories,
         "user_preferences": {},
+        "search_mode": request.search_mode,
     }
 
     final_state = None
@@ -58,12 +60,22 @@ async def search_papers(request: SearchRequest):
     if filter_report:
         _filter_reports[session_id] = filter_report
 
-    return {
+    response: dict = {
         "session_id": session_id,
         "ranked_results": ranked_results,
         "filter_report": filter_report,
         "error": error,
     }
+
+    # Build co-author graph for author-mode searches
+    if request.search_mode == "author" and ranked_results:
+        try:
+            coauthor_graph = build_coauthor_graph(request.query, ranked_results)
+            response["coauthor_graph"] = coauthor_graph
+        except Exception as e:
+            print(f"[routes_search] co-author graph build failed: {e}")
+
+    return response
 
 
 @router.get("/api/search/filter-report/{session_id}")

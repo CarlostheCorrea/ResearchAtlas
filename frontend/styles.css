@@ -522,7 +522,7 @@ body {
   position: relative;
 }
 .tab-pane { display: none; }
-.tab-pane.active { display: block; }
+.tab-pane.active { display: block; overflow-y: auto; height: 100%; }
 
 #tab-summary {
   height: 100%;
@@ -1532,6 +1532,138 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+
+/* ── Search mode toggle ── */
+#search-mode-toggle {
+  display: flex;
+  gap: 4px;
+}
+.mode-btn {
+  flex: 1;
+  padding: 5px 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--ink-3);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.mode-btn:hover { color: var(--ink-2); border-color: var(--border-2); }
+.mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+[data-theme="dark"] .mode-btn.active { color: #141414; }
+
+/* ── Co-author network panel ── */
+#tab-panel-network {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  display: none;
+  flex-direction: column;
+}
+#tab-panel-network.active { display: flex; }
+
+/* ── Author header (replaces paper header when Co-author Network tab is active) ── */
+#author-header {
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.author-header-name {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+.author-header-meta {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* ── Co-author warning banner ── */
+.coauthor-warning {
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-bd);
+  border-radius: var(--radius);
+  color: var(--amber);
+  font-size: 12px;
+  padding: 8px 14px;
+  margin: 12px 16px 4px;
+  flex-shrink: 0;
+}
+
+/* ── Co-author tooltip ── */
+.coauthor-tooltip {
+  position: absolute;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  max-width: 240px;
+  box-shadow: 0 4px 14px var(--shadow);
+  z-index: 20;
+  word-break: break-word;
+}
+[data-theme="dark"] .coauthor-tooltip { background: var(--border-2); color: var(--ink); }
+
+/* ── Co-author legend ── */
+.coauthor-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 3px;
+}
+
+/* ── Author filter chip ── */
+.author-filter-chip {
+  padding: 6px 12px;
+  background: var(--accent-bg);
+  border-bottom: 1px solid var(--accent-bd);
+  font-size: 12px;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.author-filter-chip strong { color: var(--accent); }
+.author-filter-chip button {
+  background: none;
+  border: 1px solid var(--accent-bd);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 11px;
+  padding: 1px 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.author-filter-chip button:hover { background: var(--accent-bg); }
 
 /* ── Shortlist ── */
 #shortlist-section { padding: 8px 12px; border-top: 1px solid var(--border); }

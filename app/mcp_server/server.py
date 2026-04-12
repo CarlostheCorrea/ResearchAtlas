@@ -86,7 +86,7 @@ def call_tool(call: ToolCall) -> Any:
     dispatch = {
         "search_papers":          lambda: search_papers(
             p["query"], p.get("max_results", 20), p.get("sort_by", "relevance"),
-            p.get("start", 0), p.get("year_from"),
+            p.get("start", 0), p.get("year_from"), p.get("search_mode", "topic"),
         ),
         "get_paper_metadata":     lambda: get_paper_metadata(p["arxiv_id"]),
         "get_paper_abstract":     lambda: get_paper_abstract(p["arxiv_id"]),

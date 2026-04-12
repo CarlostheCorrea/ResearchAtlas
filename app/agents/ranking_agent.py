@@ -4,8 +4,10 @@ Uses GPT-4o to assess relevance. Also factors in recency and user preferences.
 Runs ONLY on pre-filtered papers — never on the full raw result set.
 
 Phase 3 — Week 10: Multi-Agent Workflows. One GPT-4o call for all papers at once.
+In author mode: skips GPT call entirely; uses deterministic author-presence scoring.
 """
 import json
+import re
 from datetime import datetime
 from openai import OpenAI
 from app.config import OPENAI_API_KEY, OPENAI_MODEL
@@ -13,6 +15,31 @@ from app.prompts import RANKING_SYSTEM_PROMPT
 from app.schemas import Paper, RankedPaper
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+
+def _normalize_name(name: str) -> str:
+    """Normalize author name for comparison.
+    Lowercases, strips punctuation, sorts tokens alphabetically
+    so 'Yuxiang Ji', 'Ji, Yuxiang', 'Y. Ji' all map similar keys.
+    """
+    name = name.lower()
+    name = re.sub(r"[^\w\s]", " ", name)
+    tokens = sorted(name.split())
+    return " ".join(tokens)
+
+
+def score_author_presence(query_author: str, paper: Paper) -> float:
+    """Return 100.0 if query author is first author, 70.0 if anywhere else, 0.0 if absent."""
+    query_norm = _normalize_name(query_author)
+    if not paper.authors:
+        return 0.0
+    first_norm = _normalize_name(paper.authors[0])
+    if first_norm == query_norm:
+        return 100.0
+    for author in paper.authors[1:]:
+        if _normalize_name(author) == query_norm:
+            return 70.0
+    return 0.0
 
 
 def score_relevance(query: str, papers: list[Paper]) -> dict[str, float]:
@@ -71,29 +98,51 @@ def run_ranking_agent(state: dict) -> dict:
     # Convert dicts to Paper objects if needed
     filtered = [Paper(**p) if isinstance(p, dict) else p for p in raw]
     prefs = state.get("user_preferences", {})
+    search_mode = state.get("search_mode", "topic")
+    query_author = state.get("user_query", "")
 
-    relevance_scores = score_relevance(state["user_query"], filtered)
+    if search_mode == "author":
+        # Author mode: deterministic scoring — no LLM call
+        ranked = []
+        for paper in filtered:
+            author_score = score_author_presence(query_author, paper)
+            rec = score_recency(paper.published)
+            pref = score_preference_match(paper, prefs)
 
-    ranked = []
-    for paper in filtered:
-        rel = float(relevance_scores.get(paper.arxiv_id, 50.0))
-        rec = score_recency(paper.published)
-        pref = score_preference_match(paper, prefs)
+            composite = author_score * 0.5 + rec * 0.4 + pref * 0.1
 
-        w_rel  = float(prefs.get("weight_relevance", 0.5))
-        w_rec  = float(prefs.get("weight_recency", 0.3))
-        w_pref = float(prefs.get("weight_preference", 0.2))
+            ranked.append(RankedPaper(
+                paper=paper,
+                relevance_score=author_score,
+                recency_score=rec,
+                preference_score=pref,
+                composite_score=round(composite, 1),
+                score_breakdown={"relevance": author_score, "recency": rec, "preference": pref},
+            ))
+    else:
+        # Topic mode: use GPT-4o for relevance scoring
+        relevance_scores = score_relevance(query_author, filtered)
 
-        composite = rel * w_rel + rec * w_rec + pref * w_pref
+        ranked = []
+        for paper in filtered:
+            rel = float(relevance_scores.get(paper.arxiv_id, 50.0))
+            rec = score_recency(paper.published)
+            pref = score_preference_match(paper, prefs)
 
-        ranked.append(RankedPaper(
-            paper=paper,
-            relevance_score=rel,
-            recency_score=rec,
-            preference_score=pref,
-            composite_score=round(composite, 1),
-            score_breakdown={"relevance": rel, "recency": rec, "preference": pref},
-        ))
+            w_rel  = float(prefs.get("weight_relevance", 0.5))
+            w_rec  = float(prefs.get("weight_recency", 0.3))
+            w_pref = float(prefs.get("weight_preference", 0.2))
+
+            composite = rel * w_rel + rec * w_rec + pref * w_pref
+
+            ranked.append(RankedPaper(
+                paper=paper,
+                relevance_score=rel,
+                recency_score=rec,
+                preference_score=pref,
+                composite_score=round(composite, 1),
+                score_breakdown={"relevance": rel, "recency": rec, "preference": pref},
+            ))
 
     ranked.sort(key=lambda x: x.composite_score, reverse=True)
     return {"ranked_results": [r.model_dump() for r in ranked]}

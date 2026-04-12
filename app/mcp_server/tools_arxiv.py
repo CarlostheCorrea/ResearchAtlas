@@ -108,6 +108,7 @@ def search_papers(
     sort_by: str = "relevance",
     start: int = 0,
     year_from: Optional[int] = None,
+    search_mode: str = "topic",
 ) -> list[dict]:
     """Search arXiv for papers matching query. Returns list of Paper dicts.
 
@@ -116,15 +117,22 @@ def search_papers(
     top. The pre-filter agent then drops anything older than year_from.
     We fetch extra results (up to 2× max_results) when a year filter is active
     so the pre-filter has enough to work with after dropping older papers.
+
+    When search_mode == "author", the query is wrapped in au:"..." syntax to
+    search by author name. The year_from buffer logic is skipped in author mode.
     """
     try:
-        search_query = f"all:{query}"
+        if search_mode == "author":
+            search_query = f'au:"{query}"'
+        else:
+            search_query = f"all:{query}"
 
         # When the user wants a specific year range, fetch a larger pool so
         # the pre-filter has enough candidates after dropping older results.
         # Keep sort_by=relevance so we get topically relevant papers across
         # the full date range, not just the most recent ones.
-        if year_from:
+        # Only apply the 2× buffer in topic mode — in author mode we want all results.
+        if year_from and search_mode != "author":
             max_results = min(max_results * 2, 100)
 
         params = urllib.parse.urlencode({

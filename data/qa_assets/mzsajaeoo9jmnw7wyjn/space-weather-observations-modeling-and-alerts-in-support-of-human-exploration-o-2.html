@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Modeling Space Weather for Mars Exploration</title>
+  <style>
+    :root { --ink: #171717; --muted: #666; --paper: #fbfaf5; --accent: #315fbd; --line: #ded9cc; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font-family: Georgia, "Times New Roman", serif; }
+    main { max-width: 1040px; margin: 0 auto; padding: 40px 28px 64px; }
+    header { border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 28px; }
+    h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1.02; margin: 0 0 12px; letter-spacing: -0.04em; }
+    .subtitle { color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: 0.14em; }
+    .question { margin-top: 14px; color: var(--muted); font-size: 15px; }
+    .slide { min-height: 560px; border: 1px solid var(--line); background: #fffdf8; border-radius: 18px; padding: 42px; margin: 28px 0; page-break-after: always; box-shadow: 0 16px 44px rgba(0,0,0,0.08); }
+    .slide-kicker { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.18em; margin-bottom: 16px; }
+    h2 { font-size: clamp(28px, 4vw, 44px); line-height: 1.08; margin: 0 0 28px; letter-spacing: -0.03em; }
+    ul { font-size: 25px; line-height: 1.35; padding-left: 30px; margin: 0; }
+    li { margin: 0 0 18px; }
+    .speaker-notes { margin-top: 36px; border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 16px; line-height: 1.55; }
+    .speaker-notes h3 { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.16em; margin: 0 0 8px; }
+    .speaker-notes p { margin: 0; }
+    .citations { border: 1px solid var(--line); border-radius: 14px; padding: 24px; background: #fffdf8; color: var(--muted); }
+    .citations h2 { font-size: 22px; margin-bottom: 14px; }
+    .citations li { font-size: 14px; line-height: 1.45; margin-bottom: 10px; }
+    @media print {
+      body { background: white; }
+      main { padding: 0; max-width: none; }
+      header { padding: 24px; }
+      .slide { min-height: 7.5in; margin: 0; border-radius: 0; box-shadow: none; border: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="subtitle">ResearchAtlas Presentation</div>
+      <h1>Modeling Space Weather for Mars Exploration</h1>
+      <div class="question">Make a presentation about  the methods in the research.</div>
+    </header>
+    
+      <section class="slide">
+        <div class="slide-kicker">ResearchAtlas slide 1</div>
+        <h2>Introduction to Space Weather Modeling</h2>
+        <ul>
+          <li>Utilizes 3D BATS-R-US Mars MS-MHD code</li>
+<li>Focus on extreme space weather events</li>
+<li>Includes Martian conducting core</li>
+        </ul>
+        <aside class="speaker-notes"><h3>Speaker Notes</h3><p>This slide introduces the primary tool used in the research, the 3D BATS-R-US Mars multi-species magnetohydrodynamic code. It is designed to simulate how Mars responds to extreme space weather events, such as those similar to a Carrington-type event. The model also incorporates the Martian conducting core, which is crucial for accurate simulations.</p></aside>
+      </section>
+      <section class="slide">
+        <div class="slide-kicker">ResearchAtlas slide 2</div>
+        <h2>Modeling Ion Species</h2>
+        <ul>
+          <li>Solves continuity equations for each ion species</li>
+<li>Uses one momentum and one energy equation</li>
+<li>Focus on ion fluids: H+, O+, O2+, CO2+</li>
+        </ul>
+        <aside class="speaker-notes"><h3>Speaker Notes</h3><p>This slide details how the model handles different ion species. It solves separate continuity equations for each ion species, which is essential for understanding their behavior under space weather conditions. The model uses a single momentum and energy equation for the ion fluids, specifically focusing on H+, O+, O2+, and CO2+.</p></aside>
+      </section>
+      <section class="slide">
+        <div class="slide-kicker">ResearchAtlas slide 3</div>
+        <h2>Importance for Mars Exploration</h2>
+        <ul>
+          <li>Predicts effects of space weather on Mars</li>
+<li>Crucial for human exploration and technology</li>
+<li>Emphasizes need for comprehensive models</li>
+        </ul>
+        <aside class="speaker-notes"><h3>Speaker Notes</h3><p>The final slide highlights the importance of these simulations. By predicting the effects of space weather on Mars, the research supports the safety and success of future human exploration and technological operations on the planet. The paper stresses the necessity of comprehensive space weather models to ensure preparedness for such missions.</p></aside>
+      </section>
+    
+  </main>
+</body>
+</html>

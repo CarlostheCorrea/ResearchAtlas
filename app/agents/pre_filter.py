@@ -17,6 +17,7 @@ def pre_filter_papers(
     saved_arxiv_ids: set[str],
     year_from: int = None,
     required_categories: list[str] = None,
+    search_mode: str = "topic",
 ) -> tuple[list[Paper], dict]:
     """
     Filter papers before any LLM scoring.
@@ -74,11 +75,13 @@ def pre_filter_papers(
                 continue
 
         # Filter 5: Keyword relevance — at least 1 query keyword in title or abstract
-        title_abstract = (paper.title + " " + paper.abstract).lower()
-        keyword_hits = [kw for kw in query_keywords if kw in title_abstract]
-        if query_keywords and len(keyword_hits) == 0:
-            drop_reasons[pid] = "no query keywords found in title/abstract"
-            continue
+        # Skip in author mode: arXiv au: search already ensures author relevance.
+        if search_mode != "author":
+            title_abstract = (paper.title + " " + paper.abstract).lower()
+            keyword_hits = [kw for kw in query_keywords if kw in title_abstract]
+            if query_keywords and len(keyword_hits) == 0:
+                drop_reasons[pid] = "no query keywords found in title/abstract"
+                continue
 
         # Filter 6: Abstract minimum length
         if len(paper.abstract.strip()) < 50:
@@ -121,6 +124,7 @@ def pre_filter_node(state: dict) -> dict:
         saved_arxiv_ids=saved_ids,
         year_from=state.get("year_from"),
         required_categories=state.get("required_categories"),
+        search_mode=state.get("search_mode", "topic"),
     )
 
     return {

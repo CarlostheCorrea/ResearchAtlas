@@ -53,6 +53,7 @@ class SearchRequest(BaseModel):
     max_results: int = 20       # fetch more than needed — pre-filter will cut this down
     year_from: Optional[int] = None
     categories: Optional[list[str]] = None
+    search_mode: str = "topic"  # "topic" | "author"
 
 
 class ChatRequest(BaseModel):

@@ -393,8 +393,10 @@ class TestQAOrchestratorHelpers:
         assert _is_continuation_request("Now make your previous answer a PDF.") is True
         assert _is_continuation_request("Make that an image.") is True
         assert _is_continuation_request("Now make that a presentation.") is True
+        assert _is_continuation_request("Make a MD file of the previous question.") is True
         assert _needs_graphic("Make that an image.") is True
         assert _is_continuation_request("What are the key findings?") is False
+        assert _is_continuation_request("What was the previous question?") is False
 
     def test_latest_context_answer_prefers_most_recent_answer(self):
         from app.qa.orchestrator import _latest_context_answer
@@ -559,6 +561,44 @@ class TestQAEvaluationHelpers:
 
         assert tracking["artifact_match"]["status"] == "fail"
         assert tracking["tool_counts"]["retrieve_paper_chunks"] == 1
+
+    def test_tracking_calibration_handles_specific_single_citation(self):
+        from app.qa.evaluation import _calibrate_tracking
+
+        tracking = {
+            "answer_relevance": {"status": "pass", "score": 0.9, "note": "Relevant."},
+            "groundedness": {"status": "pass", "score": 0.8, "note": "Grounded."},
+            "citation_quality": {
+                "status": "fail",
+                "score": 0.3,
+                "note": "Only one citation was provided.",
+            },
+            "retrieval_relevance": {
+                "status": "fail",
+                "score": 0.0,
+                "note": "No retrieval tools were used.",
+            },
+            "tool_choice_quality": {"status": "fail", "score": 0.4, "note": "Weak tool choice."},
+            "artifact_match": {"status": "not_applicable", "score": 1.0, "note": "No artifact."},
+        }
+        citations = [{"section": "Methods", "page": 5, "quote": "The study used a controlled experiment."}]
+
+        calibrated = _calibrate_tracking(
+            tracking,
+            "What method did the paper use?",
+            "The paper used a controlled experimental method.",
+            citations,
+            {"find_evidence": 1},
+            [],
+            None,
+            {"items": citations},
+        )
+
+        assert calibrated["citation_quality"]["status"] == "pass"
+        assert calibrated["retrieval_relevance"]["status"] == "pass"
+        assert calibrated["overall_status"] == "passed"
+        assert calibrated["repair_recommended"] is False
+        assert calibrated["calibration_notes"]
 
 
 class TestQAMcpHostDecoding:

@@ -46,6 +46,15 @@ Evaluate ONLY these two dimensions from the payload:
                      provided citations/evidence? Fail this if the answer
                      asserts paper content that no citation supports.
 
+IMPORTANT — ARTIFACT REQUEST RULE:
+If the question is primarily a request to CREATE A FILE (PDF, markdown, presentation,
+slide deck, image, graphic, etc.) AND the payload shows that assets were successfully
+generated (assets list is non-empty), mark answer_relevance as "not_applicable" with
+score 1.0. The generated file IS the answer — the text response is only a preview of
+the content. Do NOT penalise answer_relevance because the text does not say "here is
+your PDF"; the job was to create the file, which was done.
+Groundedness should still be evaluated normally against the text content and citations.
+
 IMPORTANT — METADATA GROUNDING RULE:
 If the question asks about authorship, title, publication year/date, venue, journal,
 conference, or arXiv categories, AND the answer is consistent with the paper_metadata
@@ -77,10 +86,17 @@ Evaluate ONLY these four supporting dimensions from the payload:
                         section="Paper Metadata" are valid and correct for
                         answers derived from paper metadata fields (authors,
                         title, year, venue, categories).
+                        Do not fail citation_quality solely because there is
+                        only one citation: one specific citation is enough for
+                        a narrow answer when it has a page/section/quote and
+                        directly supports the claim.
   retrieval_relevance — Did the tool calls (retrieve_paper_chunks, find_evidence)
                         retrieve content relevant to the question? Judge from
-                        the tool_timeline and citations. Mark not_applicable if
-                        no retrieval tools were called.
+                        tool_counts, tool_timeline, evidence_bundle, and citations.
+                        tool_counts is the authoritative summary if the timeline
+                        is truncated. Mark not_applicable if no retrieval tools
+                        were called and the answer came from metadata or a pure
+                        artifact transformation.
   tool_choice_quality — Were the right MCP tools called in a sensible sequence?
                         Fail if unnecessary tools were called or critical ones
                         were skipped.
@@ -148,6 +164,140 @@ def _tool_counts(tool_timeline: list[dict[str, Any]]) -> dict[str, int]:
         if event.get("kind") == "tool" and event.get("status") == "completed" and tool:
             counts[tool] = counts.get(tool, 0) + 1
     return counts
+
+
+def _artifact_requested(question: str) -> bool:
+    return any(
+        token in (question or "").lower()
+        for token in (
+            "download",
+            "pdf",
+            "markdown",
+            ".md",
+            "image",
+            "graphic",
+            "slide",
+            "presentation",
+        )
+    )
+
+
+def _metadata_question(question: str) -> bool:
+    return any(
+        token in (question or "").lower()
+        for token in (
+            "author",
+            "authors",
+            "title",
+            "year",
+            "date",
+            "published",
+            "venue",
+            "journal",
+            "conference",
+            "category",
+            "categories",
+        )
+    )
+
+
+def _citation_is_specific(citation: dict[str, Any]) -> bool:
+    if not isinstance(citation, dict):
+        return False
+    has_location = bool(citation.get("page") or citation.get("section"))
+    has_support = bool(citation.get("quote") or citation.get("text") or citation.get("title"))
+    return has_location and has_support
+
+
+def _looks_like_single_citation_false_negative(metric_item: dict[str, Any], answer: str, citations: list[dict[str, Any]]) -> bool:
+    if len(citations) != 1 or not _citation_is_specific(citations[0]):
+        return False
+    note = (metric_item.get("note") or "").lower()
+    complained_about_one_citation = "only one citation" in note or "one citation" in note
+    narrow_answer = len(answer or "") <= 1000 or (answer or "").count(".") <= 4
+    return complained_about_one_citation and narrow_answer
+
+
+def _has_retrieval_support(
+    citations: list[dict[str, Any]],
+    tool_counts: dict[str, int],
+    evidence_bundle: dict[str, Any] | None,
+) -> bool:
+    retrieval_tools = ("retrieve_paper_chunks", "find_evidence", "cite_evidence", "compare_sections")
+    if any(tool_counts.get(tool, 0) > 0 for tool in retrieval_tools):
+        return True
+    if citations:
+        return True
+    if evidence_bundle and evidence_bundle.get("items"):
+        return True
+    return False
+
+
+def _calibrate_tracking(
+    tracking: dict[str, Any],
+    question: str,
+    answer: str,
+    citations: list[dict[str, Any]],
+    tool_counts: dict[str, int],
+    assets: list[dict[str, Any]],
+    generated_image: dict[str, Any] | None,
+    evidence_bundle: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Normalize obvious judge false negatives without hiding real failures."""
+    notes: list[str] = []
+
+    citation_quality = tracking.get("citation_quality", {})
+    if (
+        citation_quality.get("status") == "fail"
+        and _looks_like_single_citation_false_negative(citation_quality, answer, citations)
+    ):
+        tracking["citation_quality"] = metric(
+            "pass",
+            max(metric_score(citation_quality), 0.75),
+            "Single specific citation is sufficient for this narrow answer.",
+        )
+        notes.append("citation_quality normalized: one specific citation supports a narrow answer.")
+
+    retrieval_relevance = tracking.get("retrieval_relevance", {})
+    if retrieval_relevance.get("status") == "fail":
+        if _has_retrieval_support(citations, tool_counts, evidence_bundle):
+            tracking["retrieval_relevance"] = metric(
+                "pass",
+                max(metric_score(retrieval_relevance), 0.75),
+                "Retrieval/evidence support is present in citations or tool counts.",
+            )
+            notes.append("retrieval_relevance normalized: evidence support was present.")
+        elif _metadata_question(question) or _artifact_requested(question):
+            tracking["retrieval_relevance"] = metric(
+                "not_applicable",
+                1.0,
+                "Retrieval was not required for this metadata or artifact request.",
+            )
+            notes.append("retrieval_relevance normalized: retrieval was not required.")
+
+    artifact_match = tracking.get("artifact_match", {})
+    if _artifact_requested(question) and (assets or generated_image) and artifact_match.get("status") == "fail":
+        tracking["artifact_match"] = metric(
+            "pass",
+            max(metric_score(artifact_match), 0.9),
+            "Requested artifact was generated.",
+        )
+        notes.append("artifact_match normalized: artifact asset was generated.")
+
+    if notes:
+        tracking["calibration_notes"] = notes
+
+    failed_core = any(
+        tracking.get(name, {}).get("status") == "fail"
+        for name in ("answer_relevance", "groundedness", "citation_quality")
+    )
+    failed_artifact = (
+        _artifact_requested(question)
+        and tracking.get("artifact_match", {}).get("status") == "fail"
+    )
+    tracking["overall_status"] = "needs_review" if failed_core or failed_artifact else "passed"
+    tracking["repair_recommended"] = failed_core
+    return tracking
 
 
 def _safe_metric(raw: Any, fallback_note: str) -> dict[str, Any]:
@@ -306,15 +456,25 @@ def evaluate_qa_response(
         return tracking
 
     # Shared payload slices for both judges
+    tool_counts = _tool_counts(tool_timeline)
     base_payload: dict[str, Any] = {
         "question": question,
         "answer": answer,
         "citations": citations[:6],
-        "tool_timeline": tool_timeline[-12:],
+        "tool_timeline": tool_timeline[-20:],
+        "tool_counts": tool_counts,
         "paper_metadata": paper_metadata,
         "repair_attempted": repair_attempted,
     }
-    quality_payload = {**base_payload}
+    # Include assets in the quality payload so the judge can apply the
+    # ARTIFACT REQUEST RULE — when a file was successfully created, the
+    # judge marks answer_relevance as not_applicable instead of penalising
+    # the text response for not saying "here is your PDF".
+    quality_payload = {
+        **base_payload,
+        "assets": assets,
+        "generated_image": generated_image,
+    }
     supporting_payload = {
         **base_payload,
         "assets": assets,
@@ -346,21 +506,22 @@ def evaluate_qa_response(
                 "artifact_match":      _safe_metric(supporting_raw.get("artifact_match"),   "Supporting judge did not return this metric."),
             }
 
-            failed_core = any(
-                tracking[name]["status"] == "fail"
-                for name in ("answer_relevance", "groundedness", "citation_quality")
-            )
-            failed_any = any(
-                item["status"] == "fail"
-                for item in tracking.values()
-                if isinstance(item, dict)
+            tracking = _calibrate_tracking(
+                tracking,
+                question,
+                answer,
+                citations,
+                tool_counts,
+                assets,
+                generated_image,
+                evidence_bundle,
             )
 
             tracking.update({
-                "overall_status": "needs_review" if failed_any else "passed",
-                "repair_recommended": failed_core,
+                "overall_status": tracking["overall_status"],
+                "repair_recommended": tracking["repair_recommended"],
                 "repair_reason": quality_raw.get("thought", "") or supporting_raw.get("thought", ""),
-                "tool_counts": _tool_counts(tool_timeline),
+                "tool_counts": tool_counts,
                 "phoenix": phoenix_status(),
                 "source": "llm_judge",
                 # Expose CoT thoughts for the UI

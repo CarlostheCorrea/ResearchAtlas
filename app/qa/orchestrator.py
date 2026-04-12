@@ -113,16 +113,26 @@ def _graphic_source_question(question: str) -> str:
 # Matches pronoun DIRECTLY coupled to a transform verb — the pronoun must be
 # the object being transformed, not a relative clause word like "that summarises".
 # Examples that match:  "make this a PDF"  "turn it into a PDF"  "make that an image"
+#                       "make the previous question answer a presentation"
 # Examples that don't:  "PDF that summarises methods"  "limitations of the research"
 _CONTINUATION_RE = re.compile(
     r"\b(?:make|turn|convert|export|save|put|get|render|create)\s+(?:this|that|it)\b"
-    r"|\b(?:this|that|it)\s+(?:into|as|a|to)\s+(?:pdf|md|markdown|image|graphic|picture|presentation|slide)",
+    r"|\b(?:this|that|it)\s+(?:into|as|a|to)\s+(?:pdf|md|markdown|image|graphic|picture|presentation|slide)"
+    # "make the previous/last answer/question [into] a presentation"
+    r"|\b(?:make|turn|convert|export|render)\s+the\s+(?:previous|last)\s+(?:answer|question(?:\s+answer)?)\b",
     re.IGNORECASE,
 )
 _EXPLICIT_BACK_REFS = (
     "previous answer", "last answer", "your previous", "your last",
     "above answer", "same answer", "the answer above",
+    "previous response", "last response",
     "what you just said", "what you wrote",
+    # Users often say "previous question answer" meaning "the answer to the previous question"
+    "previous question answer", "last question answer",
+    "previous question into", "last question into",
+    # With transform requests, "previous question" usually means "the answer to the previous question".
+    # This is safe because _is_continuation_request checks transform_requested first.
+    "previous question", "last question",
 )
 
 
@@ -244,6 +254,14 @@ def _answer_from_metadata(question: str, metadata: dict[str, Any]) -> tuple[str,
 
 def _answer_memory_query(question: str, context: dict[str, Any] | None) -> str | None:
     lowered = question.lower().strip()
+
+    # Never intercept when the user is asking to TRANSFORM the previous answer
+    # (e.g. "make the previous question answer a presentation").  Those requests
+    # are handled by the continuation path; returning memory text here would
+    # swallow the tool call.
+    if bool(_requested_download_tools(question)) or _needs_graphic(question):
+        return None
+
     turns = _recent_turns(context)
     if not turns:
         if any(token in lowered for token in ("last question", "previous question", "what did i ask", "what was my question")):
@@ -673,43 +691,12 @@ async def run_qa_orchestrator(session_id: str, question: str, arxiv_id: str, pro
         )
         previous_answer = _latest_context_answer(continuation_context)
 
-        memory_answer = _answer_memory_query(question, continuation_context)
-        if memory_answer:
-            rationale = _rationale_entry(
-                "CoT Trace",
-                "This is a conversation-memory question, so I can answer from the recent Q/A thread without calling paper tools.",
-            )
-            timeline.append(rationale)
-            progress(rationale)
-            evidence_bundle = {
-                "enabled": False,
-                "pdf_url": f"/paper-pdfs/{arxiv_id}.pdf",
-                "items": [],
-            }
-            tracking = evaluate_qa_response(
-                question,
-                memory_answer,
-                [],
-                timeline,
-                assets,
-                None,
-                evidence_bundle,
-                metadata,
-            )
-            _add_tracking_event(timeline, progress, tracking)
-            return {
-                "final_answer": memory_answer,
-                "chat_message": memory_answer,
-                "answer_citations": [],
-                "tool_timeline": timeline,
-                "available_tools": tool_catalog,
-                "assets": assets,
-                "generated_image": None,
-                "evidence_bundle": evidence_bundle,
-                "paper_metadata": metadata,
-                "tracking": tracking,
-            }
-
+        # ── Continuation check MUST come before memory check ─────────────────
+        # "Now use the previous answer to make a presentation" contains the
+        # phrase "previous answer", which _answer_memory_query would incorrectly
+        # treat as a recall query and short-circuit. Always check for a
+        # transform/export request first so continuation requests are never
+        # swallowed by the memory fast-path.
         if _is_continuation_request(question) and previous_answer:
             rationale = _rationale_entry(
                 "CoT Trace",
@@ -816,6 +803,47 @@ async def run_qa_orchestrator(session_id: str, question: str, arxiv_id: str, pro
                 "available_tools": tool_catalog,
                 "assets": assets,
                 "generated_image": generated_image,
+                "evidence_bundle": evidence_bundle,
+                "paper_metadata": metadata,
+                "tracking": tracking,
+            }
+
+        # ── Memory fast-path (must come AFTER continuation check) ────────────
+        # "What was your last answer?" → report from history.
+        # This runs after _is_continuation_request so that "use the previous
+        # answer to make a presentation" is never swallowed here.
+        memory_answer = _answer_memory_query(question, continuation_context)
+        if memory_answer:
+            rationale = _rationale_entry(
+                "CoT Trace",
+                "This is a conversation-memory question, so I can answer from the recent Q/A thread without calling paper tools.",
+            )
+            timeline.append(rationale)
+            progress(rationale)
+            evidence_bundle = {
+                "enabled": False,
+                "pdf_url": f"/paper-pdfs/{arxiv_id}.pdf",
+                "items": [],
+            }
+            tracking = evaluate_qa_response(
+                question,
+                memory_answer,
+                [],
+                timeline,
+                assets,
+                None,
+                evidence_bundle,
+                metadata,
+            )
+            _add_tracking_event(timeline, progress, tracking)
+            return {
+                "final_answer": memory_answer,
+                "chat_message": memory_answer,
+                "answer_citations": [],
+                "tool_timeline": timeline,
+                "available_tools": tool_catalog,
+                "assets": assets,
+                "generated_image": None,
                 "evidence_bundle": evidence_bundle,
                 "paper_metadata": metadata,
                 "tracking": tracking,
@@ -1239,8 +1267,11 @@ async def run_qa_orchestrator(session_id: str, question: str, arxiv_id: str, pro
         # ── Regenerate download artifacts if repair improved the answer ───────
         # The pre-repair artifacts contain the original (lower-quality) text.
         # Replace them so the user always downloads the best available answer.
+        # Include "needs_review" — repair may improve the answer without fully
+        # passing the judge (e.g. going from 0.17 → 0.50). The file should
+        # still contain the improved text, not the original failure message.
         if (
-            tracking.get("overall_status") == "repaired"
+            tracking.get("overall_status") in ("repaired", "needs_review")
             and requested_download_tools
             and answer != pre_repair_answer
             and initial_download_assets

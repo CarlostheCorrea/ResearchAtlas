@@ -40,6 +40,10 @@ const state = {
   pdfScale: 1.2,
   pdfEvidenceIndex: null,
   qaLogCount: 0,
+  searchMode: 'topic',      // 'topic' | 'author'
+  coauthorGraph: null,      // graph data from API
+  activeAuthorFilter: null, // normalized author id being filtered
+  _d3Simulation: null,      // active D3 simulation (stopped on tab switch)
 };
 
 // ── API helpers ────────────────────────────────────────────────────────────────
@@ -182,6 +186,7 @@ async function handleSearch() {
       max_results: 20,
       year_from: yearFrom ? parseInt(yearFrom) : null,
       categories,
+      search_mode: state.searchMode,
     });
 
     state.currentSession = result.session_id;
@@ -193,9 +198,32 @@ async function handleSearch() {
     // Render paper cards
     renderResultsList(state.searchResults);
 
+    // Handle co-author graph for author mode
+    if (result.coauthor_graph) {
+      state.coauthorGraph = result.coauthor_graph;
+      // Show the network tab button
+      document.getElementById('tab-network').classList.remove('hidden');
+      // Clear any old filter chip
+      clearAuthorFilter();
+    } else {
+      state.coauthorGraph = null;
+      document.getElementById('tab-network').classList.add('hidden');
+    }
+
     const count = state.searchResults.length;
     updateStatusBar(`Found ${count} papers`, 'ok');
     showToast(`${count} papers ranked`, 'success');
+
+    // Auto-switch to network tab after author search.
+    // Show the paper-view shell (needed to host the tab bar) but the
+    // author header replaces the paper header so no stale paper title shows.
+    if (result.coauthor_graph && state.searchMode === 'author') {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('paper-view').classList.remove('hidden');
+      // Clear any previously selected paper header so it doesn't bleed through
+      document.getElementById('paper-header').innerHTML = '';
+      switchTab('network');
+    }
   } catch (err) {
     updateStatusBar('Search failed', 'error');
     showToast(err.message, 'error');
@@ -246,6 +274,7 @@ function renderPaperCard(rankedPaper) {
 
   const el = document.createElement('div');
   el.className = `paper-card ${scoreClass}${inLibrary ? ' in-library' : ''}`;
+  el.dataset.arxivId = paper.arxiv_id;
   el.innerHTML = `
     <button class="card-star-btn" title="Shortlist paper" data-id="${paper.arxiv_id}">☆</button>
     <div class="card-title">${escHtml(paper.title)}</div>
@@ -931,6 +960,13 @@ function renderTracking(tracking) {
     ${qualityThought ? `<div class="qa-cot-block"><span class="qa-cot-label-inline">Quality:</span> ${escHtml(qualityThought)}</div>` : ''}
     ${supportingThought ? `<div class="qa-cot-block"><span class="qa-cot-label-inline">Supporting:</span> ${escHtml(supportingThought)}</div>` : ''}
   ` : '';
+  const calibrationNotes = Array.isArray(tracking.calibration_notes) ? tracking.calibration_notes : [];
+  const calibrationHtml = calibrationNotes.length ? `
+    <div class="qa-repair-note">
+      <strong>Evaluator calibration:</strong>
+      ${calibrationNotes.map(note => `<div>${escHtml(note)}</div>`).join('')}
+    </div>
+  ` : '';
 
   // Phoenix dashboard link — shown only when Phoenix is enabled
   const phoenixEnabled = phoenix.status === 'ready';
@@ -965,6 +1001,7 @@ function renderTracking(tracking) {
       }).join('')}
     </div>
     ${tracking.repair_reason ? `<div class="qa-repair-note"><strong>Repair note:</strong> ${escHtml(tracking.repair_reason)}</div>` : ''}
+    ${calibrationHtml}
     ${tracking.evaluation_error ? `<div class="qa-repair-note qa-score-fail"><strong>Eval error:</strong> ${escHtml(tracking.evaluation_error)}</div>` : ''}
     ${thoughtHtml}
     <div class="qa-panel-title qa-tracking-subtitle">Tool Counts</div>
@@ -1290,6 +1327,203 @@ function renderShortlist() {
   `).join('');
 }
 
+// ── Co-author network ──────────────────────────────────────────────────────────
+function renderCoauthorNetwork(graph) {
+  const container = document.getElementById('tab-panel-network');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!graph || !graph.nodes || graph.nodes.length === 0) {
+    container.innerHTML = '<p style="padding:20px;color:var(--ink-2)">No co-author data available.</p>';
+    return;
+  }
+
+  // Ambiguity warning
+  if (graph.ambiguity_warning) {
+    const warn = document.createElement('div');
+    warn.className = 'coauthor-warning';
+    warn.textContent = '\u26A0 Results may include multiple authors with this name. Disconnected clusters in the graph indicate possible name ambiguity.';
+    container.appendChild(warn);
+  }
+
+  // D3 fallback: if D3 not available, render simple text list
+  if (typeof d3 === 'undefined') {
+    const fallback = document.createElement('div');
+    fallback.style.cssText = 'padding:20px;';
+    const queryNode = graph.nodes.find(n => n.is_query_author);
+    const others = graph.nodes.filter(n => !n.is_query_author)
+      .sort((a, b) => b.paper_count - a.paper_count).slice(0, 20);
+    fallback.innerHTML = `
+      <p style="color:var(--ink-2);margin-bottom:12px;">
+        <strong>${escHtml(queryNode ? queryNode.label : graph.query_author)}</strong>
+        — ${graph.nodes.length} authors, ${graph.edges.length} collaborations
+      </p>
+      <p style="color:var(--ink-3);font-size:12px;margin-bottom:8px;">Top collaborators:</p>
+      <ul style="list-style:none;padding:0;">
+        ${others.map(n => `<li style="padding:4px 0;font-size:13px;color:var(--ink-2);">
+          ${escHtml(n.label)} <span style="color:var(--ink-3);font-size:11px;">(${n.paper_count} paper${n.paper_count !== 1 ? 's' : ''})</span>
+        </li>`).join('')}
+      </ul>
+    `;
+    container.appendChild(fallback);
+    return;
+  }
+
+  // Category color scale
+  const categories = [...new Set(graph.nodes.map(n => n.primary_category))];
+  const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(categories);
+
+  const width = container.clientWidth || 900;
+  const height = Math.max(560, Math.round(width * 0.65));
+
+  const svg = d3.select(container)
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height)
+    .style('background', 'var(--paper)');
+
+  // Tooltip div
+  const tooltip = d3.select(container)
+    .append('div')
+    .attr('class', 'coauthor-tooltip')
+    .style('opacity', 0);
+
+  const links = graph.edges.map(e => ({
+    source: e.source,
+    target: e.target,
+    weight: e.weight,
+    titles: e.titles,
+  }));
+
+  const maxPapers = d3.max(graph.nodes, n => n.paper_count) || 1;
+  const nodeRadius = n => n.is_query_author ? 36 : Math.max(12, 10 + (n.paper_count / maxPapers) * 22);
+  const edgeWidth = e => Math.max(2, Math.min(10, e.weight * 2.5));
+
+  // Deep-copy nodes so D3 can mutate x/y
+  const simNodes = graph.nodes.map(n => ({...n}));
+
+  const simulation = d3.forceSimulation(simNodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(140))
+    .force('charge', d3.forceManyBody().strength(-400))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 8));
+
+  state._d3Simulation = simulation;
+
+  // Zoom/pan — all graph elements live inside a single <g> that gets transformed
+  const zoomLayer = svg.append('g').attr('class', 'zoom-layer');
+  const zoom = d3.zoom()
+    .scaleExtent([0.2, 4])
+    .on('zoom', (event) => zoomLayer.attr('transform', event.transform));
+  svg.call(zoom);
+
+  // Hint text that fades after first interaction
+  svg.append('text')
+    .attr('x', 10).attr('y', 18)
+    .attr('font-size', 10).attr('fill', 'var(--ink-3)')
+    .attr('class', 'zoom-hint')
+    .text('Scroll to zoom · Drag to pan · Click node to filter');
+
+  const link = zoomLayer.append('g')
+    .selectAll('line')
+    .data(links)
+    .join('line')
+    .attr('stroke', '#ccc')
+    .attr('stroke-width', d => edgeWidth(d))
+    .attr('stroke-opacity', 0.7)
+    .on('mouseover', (event, d) => {
+      tooltip.transition().duration(150).style('opacity', 0.97);
+      const titles = d.titles && d.titles.length > 0 ? d.titles.map(t => `\u2022 ${t}`).join('<br>') : 'Shared paper';
+      tooltip.html(`<strong>${d.weight} shared paper${d.weight > 1 ? 's' : ''}</strong><br>${titles}`)
+        .style('left', (event.offsetX + 12) + 'px')
+        .style('top', (event.offsetY - 10) + 'px');
+    })
+    .on('mouseout', () => tooltip.transition().duration(200).style('opacity', 0));
+
+  const node = zoomLayer.append('g')
+    .selectAll('circle')
+    .data(simNodes)
+    .join('circle')
+    .attr('r', d => nodeRadius(d))
+    .attr('fill', d => d.is_query_author ? '#f5c518' : colorScale(d.primary_category))
+    .attr('stroke', d => d.is_query_author ? '#c8960c' : 'white')
+    .attr('stroke-width', d => d.is_query_author ? 3 : 1.5)
+    .style('cursor', 'pointer')
+    .call(d3.drag()
+      .on('start', (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on('end', (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
+    )
+    .on('mouseover', (event, d) => {
+      tooltip.transition().duration(150).style('opacity', 0.97);
+      tooltip.html(`<strong>${escHtml(d.label)}</strong><br>${d.paper_count} paper${d.paper_count !== 1 ? 's' : ''}<br><em>${escHtml(d.primary_category)}</em>`)
+        .style('left', (event.offsetX + 12) + 'px')
+        .style('top', (event.offsetY - 10) + 'px');
+    })
+    .on('mouseout', () => tooltip.transition().duration(200).style('opacity', 0))
+    .on('click', (event, d) => {
+      filterByAuthor(d.id, d.label, d.paper_ids);
+    });
+
+  const label = zoomLayer.append('g')
+    .selectAll('text')
+    .data(simNodes)
+    .join('text')
+    .text(d => d.label.split(' ').slice(-1)[0])
+    .attr('font-size', d => d.is_query_author ? 12 : 10)
+    .attr('font-weight', d => d.is_query_author ? '700' : '400')
+    .attr('fill', 'var(--ink)')
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => nodeRadius(d) + 13)
+    .style('pointer-events', 'none');
+
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('cx', d => d.x).attr('cy', d => d.y);
+    label.attr('x', d => d.x).attr('y', d => d.y);
+  });
+
+  // Legend
+  const legend = document.createElement('div');
+  legend.className = 'coauthor-legend';
+  legend.innerHTML = categories.slice(0, 6).map(cat =>
+    `<span class="legend-dot" style="background:${colorScale(cat)}"></span>${escHtml(cat)}`
+  ).join('  ');
+  container.appendChild(legend);
+}
+
+function filterByAuthor(authorId, authorLabel, paperIds) {
+  state.activeAuthorFilter = authorId;
+  const paperIdSet = new Set(paperIds);
+
+  // Show/hide cards based on paper_ids
+  document.querySelectorAll('.paper-card').forEach(card => {
+    const id = card.dataset.arxivId;
+    card.style.display = paperIdSet.has(id) ? '' : 'none';
+  });
+
+  // Show clear-filter chip
+  let chip = document.getElementById('author-filter-chip');
+  if (!chip) {
+    chip = document.createElement('div');
+    chip.id = 'author-filter-chip';
+    chip.className = 'author-filter-chip';
+    const resultsList = document.getElementById('results-list');
+    resultsList.parentNode.insertBefore(chip, resultsList);
+  }
+  chip.innerHTML = `Showing papers by <strong>${escHtml(authorLabel)}</strong> <button onclick="clearAuthorFilter()">\u2715 Clear</button>`;
+  chip.classList.remove('hidden');
+}
+
+function clearAuthorFilter() {
+  state.activeAuthorFilter = null;
+  document.querySelectorAll('.paper-card').forEach(card => card.style.display = '');
+  const chip = document.getElementById('author-filter-chip');
+  if (chip) chip.classList.add('hidden');
+}
+
 // ── UI helpers ─────────────────────────────────────────────────────────────────
 function updateStatusBar(text, type = 'idle') {
   const indicator = document.getElementById('status-indicator');
@@ -1322,10 +1556,56 @@ function setLoading(isLoading) {
 }
 
 function switchTab(tabName) {
+  // Stop D3 simulation when switching away from network tab
+  if (tabName !== 'network' && state._d3Simulation) {
+    state._d3Simulation.stop();
+  }
+
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelector(`.tab[data-tab="${tabName}"]`)?.classList.add('active');
-  document.getElementById(`tab-${tabName}`)?.classList.add('active');
+
+  // Network tab uses a non-standard panel id to avoid id collision with the button.
+  // When it's active, swap the paper header for a minimal author-focused header.
+  const paperHeader = document.getElementById('paper-header');
+  const authorHeader = document.getElementById('author-header');
+
+  // Tabs to hide when the network view is active (they relate to a specific paper, not an author)
+  const paperOnlyTabs = ['summary', 'chat', 'library', 'preferences'];
+
+  if (tabName === 'network') {
+    // Hide paper header, show author header
+    if (paperHeader) paperHeader.classList.add('hidden');
+    if (authorHeader && state.coauthorGraph) {
+      const g = state.coauthorGraph;
+      const paperCount = state.searchResults ? state.searchResults.length : 0;
+      authorHeader.innerHTML = `
+        <div class="author-header-inner">
+          <div class="author-header-name">${escHtml(g.query_author)}</div>
+          <div class="author-header-meta">${paperCount} paper${paperCount !== 1 ? 's' : ''} · Co-author Network</div>
+        </div>`;
+      authorHeader.classList.remove('hidden');
+    }
+    // Hide paper-specific tabs — they don't apply to an author view
+    paperOnlyTabs.forEach(t => {
+      document.querySelector(`.tab[data-tab="${t}"]`)?.classList.add('hidden');
+    });
+    const panel = document.getElementById('tab-panel-network');
+    if (panel) { panel.classList.remove('hidden'); panel.classList.add('active'); }
+    renderCoauthorNetwork(state.coauthorGraph);
+  } else {
+    // Restore paper header, hide author header
+    if (paperHeader) paperHeader.classList.remove('hidden');
+    if (authorHeader) authorHeader.classList.add('hidden');
+    // Restore paper-specific tabs
+    paperOnlyTabs.forEach(t => {
+      document.querySelector(`.tab[data-tab="${t}"]`)?.classList.remove('hidden');
+    });
+    // Hide the network panel when switching away
+    const netPanel = document.getElementById('tab-panel-network');
+    if (netPanel) netPanel.classList.remove('active');
+    document.getElementById(`tab-${tabName}`)?.classList.add('active');
+  }
 
   if (tabName === 'library') loadLibrary();
   if (tabName === 'preferences') loadPreferences();
@@ -1365,6 +1645,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Bootstrap: load library immediately for landing page + search indicators
   initApp();
+
+  // Search mode toggle
+  document.getElementById('btn-topic-mode').addEventListener('click', () => {
+    state.searchMode = 'topic';
+    document.getElementById('btn-topic-mode').classList.add('active');
+    document.getElementById('btn-author-mode').classList.remove('active');
+    document.getElementById('search-input').placeholder = 'Search arXiv papers...';
+    // Don't clear the co-author graph or tab — the user may just be browsing modes.
+    // The graph is cleared automatically when a new topic search returns no coauthor_graph.
+  });
+
+  document.getElementById('btn-author-mode').addEventListener('click', () => {
+    state.searchMode = 'author';
+    document.getElementById('btn-author-mode').classList.add('active');
+    document.getElementById('btn-topic-mode').classList.remove('active');
+    document.getElementById('search-input').placeholder = 'Search by author name...';
+  });
 
   // Search
   document.getElementById('search-btn').addEventListener('click', handleSearch);

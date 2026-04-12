@@ -19,6 +19,7 @@ class GraphState(TypedDict, total=False):
     max_results: int
     year_from: Optional[int]
     required_categories: Optional[list[str]]
+    search_mode: Optional[str]  # "topic" | "author"
 
     # Discovery flow outputs
     raw_search_results: list

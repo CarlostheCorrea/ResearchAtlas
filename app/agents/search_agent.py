@@ -12,11 +12,13 @@ def run_search_agent(state: dict) -> dict:
     query = state.get("user_query", "")
     max_results = state.get("max_results", DEFAULT_MAX_RESULTS)
     year_from = state.get("year_from")  # None means no date filter
+    search_mode = state.get("search_mode", "topic")
 
     tool_args: dict = {
         "query": query,
         "max_results": max_results,
         "sort_by": "relevance",
+        "search_mode": search_mode,
     }
     if year_from:
         tool_args["year_from"] = year_from
