@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -32,7 +32,7 @@
     <div id="search-bar">
       <input type="text" id="search-input" placeholder="Search arXiv papers..." autocomplete="off" />
       <div id="search-filters">
-        <input type="number" id="year-from" placeholder="After year" min="1990" max="2025" />
+        <input type="number" id="year-from" placeholder="After year" min="1990" max="2030" />
         <input type="text" id="categories" placeholder="e.g. cs.CL, cs.AI" />
       </div>
       <button id="search-btn">
@@ -79,6 +79,7 @@
               <!-- Side-panel tab bar -->
               <div id="qa-side-tabs">
                 <button class="qa-side-tab active" data-qaside="tools">Tools</button>
+                <button class="qa-side-tab" data-qaside="tracking">Tracking</button>
                 <button class="qa-side-tab" data-qaside="logs">Logs</button>
               </div>
 
@@ -97,7 +98,7 @@
                     <div class="qa-panel-title">Downloads</div>
                     <button id="qa-clear-assets-btn" class="btn-ghost qa-mini-btn" type="button">Clear Q/A Files</button>
                   </div>
-                  <div id="qa-assets" class="qa-empty">Generated Markdown and PDF downloads will appear here.</div>
+                  <div id="qa-assets" class="qa-empty">Generated downloads will appear here.</div>
                 </div>
                 <div class="qa-panel hidden" id="qa-graphic-panel">
                   <div class="qa-panel-title">Generated Graphic</div>
@@ -131,6 +132,14 @@
                     <button id="qa-clear-log-btn" class="btn-ghost qa-mini-btn" type="button">Clear</button>
                   </div>
                   <div id="qa-log-entries" class="qa-empty">No activity yet. Ask a question to see logs.</div>
+                </div>
+              </div>
+
+              <!-- Tracking pane -->
+              <div id="qa-side-tracking" class="qa-side-pane hidden">
+                <div class="qa-panel">
+                  <div class="qa-panel-title">Evaluation Tracking</div>
+                  <div id="qa-tracking-status" class="qa-empty">Ask a question to run the LLM-as-judge evaluation.</div>
                 </div>
               </div>
             </aside>
@@ -170,6 +179,6 @@
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
   </script>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

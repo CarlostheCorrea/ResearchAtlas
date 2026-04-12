@@ -13,3 +13,7 @@ chromadb>=0.5.0
 python-dotenv>=1.0.0
 httpx>=0.27.0
 pytest>=8.3.0
+arize-phoenix
+arize-phoenix-otel
+arize-phoenix-evals
+openinference-instrumentation-openai

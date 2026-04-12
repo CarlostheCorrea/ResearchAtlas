@@ -93,11 +93,15 @@ def human_gate_before_save(state: GraphState) -> dict:
     """
     Pause Point 2 (Week 11): Before saving summary to research library.
     User sees the full draft summary and decides to approve, reject, or revise.
+    The interrupt payload now includes summary_evaluation so the frontend can
+    display quality scores (faithfulness, specificity, completeness, section_accuracy)
+    alongside the approval modal.
     """
     result = interrupt({
         "pause_point": "before_save",
         "message": "Would you like to save this summary to your research library?",
         "draft_summary": state.get("draft_summary"),
+        "summary_evaluation": state.get("summary_evaluation"),
         "options": ["approve", "reject", "revise"],
     })
 

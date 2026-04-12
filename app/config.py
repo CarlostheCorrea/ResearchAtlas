@@ -44,3 +44,8 @@ MIN_ABSTRACT_LENGTH: int = int(os.environ.get("MIN_ABSTRACT_LENGTH", "50"))
 # Q/A orchestrator
 QA_MAX_TOOL_STEPS: int = int(os.environ.get("QA_MAX_TOOL_STEPS", "4"))
 QA_ASSET_MAX_AGE_HOURS: int = int(os.environ.get("QA_ASSET_MAX_AGE_HOURS", "24"))
+QA_JUDGE_ENABLED: bool = os.environ.get("QA_JUDGE_ENABLED", "true").lower() == "true"
+QA_REPAIR_ENABLED: bool = os.environ.get("QA_REPAIR_ENABLED", "true").lower() == "true"
+
+# Phoenix / OpenInference tracing
+PHOENIX_PROJECT_NAME: str = os.environ.get("PHOENIX_PROJECT_NAME", "researchatlas")

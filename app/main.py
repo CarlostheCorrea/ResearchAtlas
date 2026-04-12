@@ -10,12 +10,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 import app.database as db
+from app.config import PDF_DIR, QA_ASSET_MAX_AGE_HOURS, QA_ASSETS_DIR, VECTORSTORE_DIR
+from app.observability import setup_phoenix_tracing
+
+PHOENIX_BOOT_STATUS = setup_phoenix_tracing()
+
 from api.routes_search import router as search_router
 from api.routes_chat import router as chat_router
 from api.routes_qa import router as qa_router
 from api.routes_review import router as review_router
 from api.routes_library import router as library_router
-from app.config import PDF_DIR, QA_ASSET_MAX_AGE_HOURS, QA_ASSETS_DIR, VECTORSTORE_DIR
 from app.qa.assets import purge_old_assets
 
 app = FastAPI(
@@ -35,12 +39,14 @@ app.add_middleware(
 # Initialize database on startup
 @app.on_event("startup")
 async def startup():
+    phoenix = setup_phoenix_tracing()
     db.init_db()
     os.makedirs(PDF_DIR, exist_ok=True)
     os.makedirs(VECTORSTORE_DIR, exist_ok=True)
     os.makedirs(QA_ASSETS_DIR, exist_ok=True)
     purge_old_assets(QA_ASSET_MAX_AGE_HOURS)
     print("[main] Database initialized, data directories ready.")
+    print(f"[main] Phoenix tracing: {phoenix['status']} - {phoenix['message']}")
 
 
 # Register API routers

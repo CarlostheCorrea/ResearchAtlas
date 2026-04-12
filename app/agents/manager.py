@@ -37,6 +37,9 @@ def run_manager(state: dict) -> dict:
         "user_query": params.get("query") or state["user_query"],
         "selected_arxiv_id": params.get("arxiv_id"),
         "question": params.get("question"),
-        "year_from": params.get("year_from"),
-        "required_categories": params.get("categories"),
+        # LLM may extract a year from the query text (e.g. "papers from 2024").
+        # If it doesn't, preserve the year_from the user set in the UI filter.
+        "year_from": params.get("year_from") or state.get("year_from"),
+        # Same for categories — LLM extraction takes priority, UI filter is fallback.
+        "required_categories": params.get("categories") or state.get("required_categories"),
     }

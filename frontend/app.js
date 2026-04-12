@@ -502,6 +502,61 @@ async function triggerSave(summary) {
   }
 }
 
+// ── Summary evaluation scorecard ───────────────────────────────────────────────
+function renderSummaryEvaluation(evaluation) {
+  if (!evaluation) return '';
+
+  const metrics = [
+    { key: 'faithfulness',    label: 'Faithfulness',     desc: 'Claims grounded in paper text' },
+    { key: 'specificity',     label: 'Specificity',      desc: 'Concrete details from the paper' },
+    { key: 'completeness',    label: 'Completeness',     desc: 'All 8 sections substantively filled' },
+    { key: 'section_accuracy',label: 'Section Accuracy', desc: 'Each section answers its purpose' },
+  ];
+
+  const overall = (evaluation.overall_status || 'needs_review').replace(/_/g, ' ');
+  const faithFail = evaluation.faithfulness?.status === 'fail';
+  const needsReview = evaluation.overall_status === 'needs_review';
+
+  const overallColor = needsReview ? '#b91c1c' : '#2e7d32';
+  const warningHtml = faithFail
+    ? `<div class="summary-eval-warning">⚠ Some claims may not be grounded in the paper text. Consider requesting a revision.</div>`
+    : '';
+
+  const cardsHtml = metrics.map(({ key, label, desc }) => {
+    const item = evaluation[key] || {};
+    const status = item.status || 'not_applicable';
+    const score = typeof item.score === 'number' ? item.score.toFixed(2) : '—';
+    const cls = status === 'pass' ? 'pass' : status === 'fail' ? 'fail' : 'na';
+    return `
+      <div class="summary-eval-card summary-eval-${cls}">
+        <div class="summary-eval-head">
+          <span>${escHtml(label)}</span>
+          <strong>${escHtml(score)}</strong>
+        </div>
+        <div class="summary-eval-status">${escHtml(status.replace(/_/g, ' '))}</div>
+        <div class="summary-eval-note">${escHtml(item.note || desc)}</div>
+      </div>`;
+  }).join('');
+
+  const grounding = evaluation.grounding_thought;
+  const coverage  = evaluation.coverage_thought;
+  const thoughtHtml = (grounding || coverage) ? `
+    ${grounding ? `<div class="summary-eval-thought"><strong>Grounding:</strong> ${escHtml(grounding)}</div>` : ''}
+    ${coverage  ? `<div class="summary-eval-thought"><strong>Coverage:</strong> ${escHtml(coverage)}</div>`  : ''}
+  ` : '';
+
+  return `
+    <div class="summary-eval-section">
+      <div class="summary-eval-title">
+        Quality Check ·
+        <span style="color:${overallColor};font-style:normal;">${escHtml(overall)}</span>
+      </div>
+      ${warningHtml}
+      <div class="summary-eval-grid">${cardsHtml}</div>
+      ${thoughtHtml}
+    </div>`;
+}
+
 // ── Approval modal ─────────────────────────────────────────────────────────────
 function showApprovalModal(interruptPayload) {
   const modal = document.getElementById('approval-modal');
@@ -518,15 +573,16 @@ function showApprovalModal(interruptPayload) {
       <p style="color:var(--amber);">⏱ Estimated time: ${interruptPayload.estimated_time || '30-60s'}</p>
       <p style="color:var(--text-muted);margin-top:6px;font-size:12px;">${escHtml(interruptPayload.warning || '')}</p>
     `;
-    // Show only approve/reject for download gate
     document.getElementById('btn-revise').classList.add('hidden');
     document.getElementById('btn-approve').textContent = 'Yes, analyze';
   } else if (interruptPayload.pause_point === 'before_save') {
     title.textContent = 'Save this summary to your library?';
     const s = interruptPayload.draft_summary || {};
+    const evalHtml = renderSummaryEvaluation(interruptPayload.summary_evaluation);
     body.innerHTML = `
-      <p style="margin-bottom:12px;">${escHtml(interruptPayload.message || '')}</p>
-      ${s.overview ? `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;font-size:12px;color:var(--text-muted);">${escHtml(s.overview)}</div>` : ''}
+      <p style="margin-bottom:10px;">${escHtml(interruptPayload.message || '')}</p>
+      ${s.overview ? `<div class="summary-preview-box">${escHtml(s.overview)}</div>` : ''}
+      ${evalHtml}
     `;
     document.getElementById('btn-revise').classList.remove('hidden');
     document.getElementById('btn-approve').textContent = 'Approve & Save';
@@ -575,6 +631,7 @@ function switchQaSideTab(name) {
   });
   document.getElementById('qa-side-tools').classList.toggle('hidden', name !== 'tools');
   document.getElementById('qa-side-logs').classList.toggle('hidden', name !== 'logs');
+  document.getElementById('qa-side-tracking').classList.toggle('hidden', name !== 'tracking');
 }
 
 // ── Event log ─────────────────────────────────────────────────────────────────
@@ -649,6 +706,7 @@ async function sendQuestion(question) {
         const status = await apiGet(`/api/qa/status/${result.session_id}`);
         const timeline = status.tool_timeline || [];
         renderToolTimeline(timeline);
+        renderTracking(status.tracking);
         // Log only new timeline entries since last poll
         const newEntries = timeline.slice(seenTimeline);
         newEntries.forEach(entry => {
@@ -777,6 +835,8 @@ function resetQaWorkspace() {
   document.getElementById('qa-available-tools').classList.add('qa-empty');
   document.getElementById('qa-tool-timeline').innerHTML = 'Ask a question to see MCP tool usage.';
   document.getElementById('qa-tool-timeline').classList.add('qa-empty');
+  document.getElementById('qa-tracking-status').innerHTML = 'Ask a question to run the LLM-as-judge evaluation.';
+  document.getElementById('qa-tracking-status').classList.add('qa-empty');
   document.getElementById('qa-assets').innerHTML = 'Generated downloads will appear here.';
   document.getElementById('qa-assets').classList.add('qa-empty');
   document.getElementById('qa-evidence-list').innerHTML = 'Evidence quotes and PDF highlights will appear here.';
@@ -820,9 +880,99 @@ function renderToolTimeline(timeline) {
 function renderQaArtifacts(result) {
   renderAvailableTools(result.available_tools || []);
   renderToolTimeline(result.tool_timeline || []);
+  renderTracking(result.tracking);
   renderQaAssets(result.assets || []);
   renderGeneratedGraphic(result.generated_image);
   renderEvidenceBundle(result.evidence_bundle || { items: [] });
+}
+
+function metricClass(status) {
+  if (status === 'pass') return 'pass';
+  if (status === 'fail') return 'fail';
+  return 'na';
+}
+
+function prettyMetricName(name) {
+  return String(name || '')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
+function renderTracking(tracking) {
+  const container = document.getElementById('qa-tracking-status');
+  if (!container) return;
+  if (!tracking) {
+    container.innerHTML = 'Evaluation will appear after the judge runs.';
+    container.classList.add('qa-empty');
+    return;
+  }
+
+  // Ordered to match METRICS tuple in evaluation.py
+  const metrics = [
+    'answer_relevance',
+    'groundedness',
+    'citation_quality',
+    'retrieval_relevance',
+    'tool_choice_quality',
+    'artifact_match',
+  ];
+  const overall = tracking.overall_status || 'needs_review';
+  const phoenix = tracking.phoenix || {};
+  const toolCounts = tracking.tool_counts || {};
+  const toolCountHtml = Object.keys(toolCounts).length
+    ? Object.entries(toolCounts).map(([name, count]) => `<span class="qa-tool-count">${escHtml(name)} × ${escHtml(count)}</span>`).join('')
+    : '<span class="qa-empty">No completed tool calls counted yet.</span>';
+
+  // Build CoT thought sections if the judge returned them
+  const qualityThought = tracking.quality_thought || '';
+  const supportingThought = tracking.supporting_thought || '';
+  const thoughtHtml = (qualityThought || supportingThought) ? `
+    <div class="qa-panel-title qa-tracking-subtitle">Judge Reasoning</div>
+    ${qualityThought ? `<div class="qa-cot-block"><span class="qa-cot-label-inline">Quality:</span> ${escHtml(qualityThought)}</div>` : ''}
+    ${supportingThought ? `<div class="qa-cot-block"><span class="qa-cot-label-inline">Supporting:</span> ${escHtml(supportingThought)}</div>` : ''}
+  ` : '';
+
+  // Phoenix dashboard link — shown only when Phoenix is enabled
+  const phoenixEnabled = phoenix.status === 'ready';
+  const phoenixLinkHtml = phoenixEnabled
+    ? `<a href="http://localhost:6006" target="_blank" rel="noopener noreferrer" class="qa-phoenix-link">View traces in Phoenix ↗</a>`
+    : '';
+
+  container.classList.remove('qa-empty');
+  container.innerHTML = `
+    <div class="qa-tracking-summary qa-tracking-${escHtml(overall)}">
+      <div class="qa-tracking-kicker">Overall</div>
+      <div class="qa-tracking-title">${escHtml(overall.replaceAll('_', ' '))}</div>
+      <div class="qa-tracking-meta">
+        Source: ${escHtml(tracking.source || 'judge')} · Phoenix: ${escHtml(phoenix.status || 'unknown')}
+      </div>
+    </div>
+    <div class="qa-tracking-grid">
+      ${metrics.map(name => {
+        const item = tracking[name] || {};
+        const status = item.status || 'not_applicable';
+        const score = typeof item.score === 'number' ? item.score.toFixed(2) : '—';
+        return `
+          <div class="qa-score-card qa-score-${metricClass(status)}">
+            <div class="qa-score-head">
+              <span>${escHtml(prettyMetricName(name))}</span>
+              <strong>${escHtml(score)}</strong>
+            </div>
+            <div class="qa-score-status">${escHtml(status.replaceAll('_', ' '))}</div>
+            <div class="qa-score-note">${escHtml(item.note || '')}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    ${tracking.repair_reason ? `<div class="qa-repair-note"><strong>Repair note:</strong> ${escHtml(tracking.repair_reason)}</div>` : ''}
+    ${tracking.evaluation_error ? `<div class="qa-repair-note qa-score-fail"><strong>Eval error:</strong> ${escHtml(tracking.evaluation_error)}</div>` : ''}
+    ${thoughtHtml}
+    <div class="qa-panel-title qa-tracking-subtitle">Tool Counts</div>
+    <div class="qa-tool-counts">${toolCountHtml}</div>
+    <div class="qa-panel-title qa-tracking-subtitle">Phoenix Trace</div>
+    <div class="qa-score-note">${escHtml(phoenix.message || 'Phoenix status unavailable.')}</div>
+    ${phoenixLinkHtml}
+  `;
 }
 
 function renderAvailableTools(tools) {

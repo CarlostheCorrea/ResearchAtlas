@@ -480,6 +480,86 @@ class TestQAOrchestratorHelpers:
 
         assert trace == "The final answer is grounded in 2 supporting citations from the paper."
 
+    def test_graphic_source_failed_only_blocks_core_failures(self):
+        from app.qa.orchestrator import _graphic_source_failed
+
+        artifact_only_failure = {
+            "overall_status": "needs_review",
+            "answer_relevance": {"status": "pass", "score": 0.9},
+            "groundedness": {"status": "pass", "score": 0.9},
+            "citation_quality": {"status": "pass", "score": 0.9},
+            "artifact_match": {"status": "fail", "score": 0.0},
+            "repair_recommended": False,
+        }
+        core_failure = {
+            "overall_status": "needs_review",
+            "answer_relevance": {"status": "pass", "score": 0.9},
+            "groundedness": {"status": "fail", "score": 0.2},
+            "citation_quality": {"status": "pass", "score": 0.9},
+            "repair_recommended": True,
+        }
+        high_score_citation_gap = {
+            "overall_status": "needs_review",
+            "answer_relevance": {"status": "pass", "score": 0.95},
+            "groundedness": {"status": "fail", "score": 0.78},
+            "citation_quality": {"status": "pass", "score": 0.92},
+            "tool_choice_quality": {"status": "pass", "score": 0.95},
+            "artifact_match": {"status": "not_applicable", "score": 1.0},
+            "repair_recommended": True,
+        }
+
+        assert _graphic_source_failed(artifact_only_failure) is False
+        assert _graphic_source_failed(core_failure) is True
+        assert _graphic_source_failed(high_score_citation_gap) is False
+
+    def test_graphic_source_question_removes_artifact_requirement(self):
+        from app.qa.orchestrator import _graphic_source_question
+
+        assert _graphic_source_question("Create an image of the methodology.") == (
+            "What methodology details from the paper should be used as source content?"
+        )
+
+
+class TestQAEvaluationHelpers:
+    def test_should_repair_when_core_metric_fails(self):
+        from app.qa.evaluation import should_repair
+
+        tracking = {
+            "answer_relevance": {"status": "pass", "score": 0.9},
+            "groundedness": {"status": "fail", "score": 0.2},
+            "citation_quality": {"status": "pass", "score": 0.8},
+            "repair_recommended": False,
+        }
+
+        assert should_repair(tracking) is True
+
+    def test_tracking_score_ignores_not_applicable_metrics(self):
+        from app.qa.evaluation import tracking_score
+
+        tracking = {
+            "answer_relevance": {"status": "pass", "score": 1.0},
+            "groundedness": {"status": "pass", "score": 0.8},
+            "citation_quality": {"status": "not_applicable", "score": 0.0},
+            "tool_choice_quality": {"status": "pass", "score": 0.6},
+            "artifact_match": {"status": "not_applicable", "score": 0.0},
+        }
+
+        assert tracking_score(tracking) == (1.0 + 0.8 + 0.6) / 3
+
+    def test_local_tracking_marks_requested_missing_artifact_as_fail(self):
+        from app.qa.evaluation import _local_tracking
+
+        tracking = _local_tracking(
+            "Make this a PDF download.",
+            "Answer text.",
+            [],
+            [{"kind": "tool", "tool": "retrieve_paper_chunks", "status": "completed"}],
+            [],
+        )
+
+        assert tracking["artifact_match"]["status"] == "fail"
+        assert tracking["tool_counts"]["retrieve_paper_chunks"] == 1
+
 
 class TestQAMcpHostDecoding:
     def test_decode_tool_result_unwraps_fastmcp_result_wrapper(self):

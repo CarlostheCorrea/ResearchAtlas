@@ -107,11 +107,28 @@ def search_papers(
     max_results: int = 20,
     sort_by: str = "relevance",
     start: int = 0,
+    year_from: Optional[int] = None,
 ) -> list[dict]:
-    """Search arXiv for papers matching query. Returns list of Paper dicts."""
+    """Search arXiv for papers matching query. Returns list of Paper dicts.
+
+    If year_from is provided the results are sorted by submission date
+    (most-recent first) so that papers from the requested year bubble to the
+    top. The pre-filter agent then drops anything older than year_from.
+    We fetch extra results (up to 2× max_results) when a year filter is active
+    so the pre-filter has enough to work with after dropping older papers.
+    """
     try:
+        search_query = f"all:{query}"
+
+        # When the user wants a specific year range, fetch a larger pool so
+        # the pre-filter has enough candidates after dropping older results.
+        # Keep sort_by=relevance so we get topically relevant papers across
+        # the full date range, not just the most recent ones.
+        if year_from:
+            max_results = min(max_results * 2, 100)
+
         params = urllib.parse.urlencode({
-            "search_query": f"all:{query}",
+            "search_query": search_query,
             "start": start,
             "max_results": max_results,
             "sortBy": sort_by,

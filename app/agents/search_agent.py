@@ -11,12 +11,17 @@ def run_search_agent(state: dict) -> dict:
     mcp = get_mcp_client()
     query = state.get("user_query", "")
     max_results = state.get("max_results", DEFAULT_MAX_RESULTS)
+    year_from = state.get("year_from")  # None means no date filter
 
-    result = mcp.call_tool("search_papers", {
+    tool_args: dict = {
         "query": query,
         "max_results": max_results,
         "sort_by": "relevance",
-    })
+    }
+    if year_from:
+        tool_args["year_from"] = year_from
+
+    result = mcp.call_tool("search_papers", tool_args)
 
     if isinstance(result, list):
         papers = result

@@ -11,6 +11,7 @@ from app.config import OPENAI_API_KEY, OPENAI_MODEL
 from app.prompts import SUMMARY_SYSTEM_PROMPT
 from app.schemas import Summary
 from app.mcp_client import get_mcp_client
+from app.qa.summary_evaluation import evaluate_summary
 
 # 90-second timeout — gpt-4o with a large context can take 30-60 s
 client = OpenAI(api_key=OPENAI_API_KEY, timeout=90.0)
@@ -135,4 +136,51 @@ def run_summary_agent(state: dict) -> dict:
         **{k: v for k, v in summary_data.items() if k in Summary.model_fields and v is not None},
     )
 
-    return {"draft_summary": summary.model_dump()}
+    # Run the LLM-as-judge on the final summary (after any revision pass)
+    print(f"[summary_agent] Running quality evaluation...")
+    evaluation = evaluate_summary(summary.model_dump(), unique_chunks, metadata)
+    print(f"[summary_agent] Evaluation: {evaluation.get('overall_status')} "
+          f"(faithfulness={evaluation.get('faithfulness', {}).get('status', '?')}, "
+          f"completeness={evaluation.get('completeness', {}).get('status', '?')})")
+
+    # ── Auto-repair on faithfulness failure ───────────────────────────────────
+    # If the judge finds that claims are not grounded in the source text, do one
+    # repair pass with a maximally conservative prompt before showing the user.
+    if evaluation.get("faithfulness", {}).get("status") == "fail":
+        print(f"[summary_agent] Faithfulness failed — running repair pass...")
+        repair_user_content = (
+            f"Paper title: {metadata.get('title', arxiv_id)}\n\n{context}\n\n"
+            "REVISION REQUIRED — your previous summary contained claims that could "
+            "not be traced to the source text above. Regenerate the summary using "
+            "ONLY information explicitly stated in the text provided. Apply these rules:\n"
+            "1. Do NOT include exact numbers, dataset names, system names, or results "
+            "unless they appear verbatim in the text above.\n"
+            "2. If you are unsure whether a specific detail is in the text, describe "
+            "the concept generally rather than speculating.\n"
+            "3. Every sentence must be directly traceable to a passage above.\n"
+            "4. It is better to be slightly vague than to state an unverified specific."
+        )
+        try:
+            repair_response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
+                    {"role": "user", "content": repair_user_content},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.0,   # deterministic for repair
+            )
+            repaired_data = json.loads(repair_response.choices[0].message.content)
+            repaired_data["confidence_note"] = confidence_note
+            summary = Summary(
+                arxiv_id=arxiv_id,
+                title=metadata.get("title") or arxiv_id,
+                **{k: v for k, v in repaired_data.items() if k in Summary.model_fields and v is not None},
+            )
+            evaluation = evaluate_summary(summary.model_dump(), unique_chunks, metadata)
+            print(f"[summary_agent] Post-repair evaluation: {evaluation.get('overall_status')} "
+                  f"(faithfulness={evaluation.get('faithfulness', {}).get('status', '?')})")
+        except Exception as exc:
+            print(f"[summary_agent] Repair pass failed: {exc}")
+
+    return {"draft_summary": summary.model_dump(), "summary_evaluation": evaluation}

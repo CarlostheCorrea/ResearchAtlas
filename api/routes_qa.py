@@ -100,6 +100,7 @@ async def ask_question(request: QARequest, background_tasks: BackgroundTasks):
             "assets": [],
             "generated_image": None,
             "answer_citations": [],
+            "tracking": None,
             "error": None,
         })
     else:
@@ -113,6 +114,7 @@ async def ask_question(request: QARequest, background_tasks: BackgroundTasks):
             "latest_answer": None,
             "assets": [],
             "answer_citations": [],
+            "tracking": None,
         }
     print(f"[qa] {session_id[:8]} accepted: queued Q/A request for {request.arxiv_id}", flush=True)
     background_tasks.add_task(_run_qa_background, session_id, request.message, request.arxiv_id)

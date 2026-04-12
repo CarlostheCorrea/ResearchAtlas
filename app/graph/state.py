@@ -33,6 +33,7 @@ class GraphState(TypedDict, total=False):
     paper_indexed: bool
     draft_summary: Optional[dict]
     final_summary: Optional[dict]
+    summary_evaluation: Optional[dict]   # LLM-as-judge scores for the summary
 
     # Q&A flow outputs
     question: str
