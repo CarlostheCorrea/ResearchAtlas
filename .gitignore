@@ -9,6 +9,7 @@ data/research.db-shm
 data/research.db-wal
 data/pdfs/
 data/vectorstore/
+data/qa_assets/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
