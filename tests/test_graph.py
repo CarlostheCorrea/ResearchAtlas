@@ -78,5 +78,6 @@ class TestGraphBuild:
         # Check required keys are present as annotations
         annotations = GraphState.__annotations__
         for key in ["session_id", "user_query", "intent", "ranked_results",
-                    "draft_summary", "final_answer", "approval_status"]:
+                    "draft_summary", "summary_candidates", "summary_competition",
+                    "final_answer", "approval_status"]:
             assert key in annotations, f"Missing key: {key}"

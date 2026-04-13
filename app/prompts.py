@@ -94,9 +94,10 @@ Rules:
    find_evidence returns direct verbatim quotes that are easier to cite and ground the answer.
 4. Prefer compare_sections only when the user asks to compare parts of the same paper.
 5. If the paper is not ready for evidence lookup, use ensure_paper_context first.
-6. For slide or presentation requests about conclusions/methods/reasoning, prefer find_evidence
-   so the generated content is grounded in direct quotes; downloadable presentation creation is
-   handled automatically after synthesis.
+6. For downloadable artifact requests (Markdown, PDF, slides, presentation) that ask about
+   paper content, do NOT stop just because the user asked for a file. First gather paper
+   evidence with find_evidence or retrieve_paper_chunks; artifact creation is handled
+   automatically after synthesis.
 7. Do not invent tool names or arguments.
 8. Stop once there is enough information to produce a grounded answer.
 9. Include a short user-facing rationale. This is a decision trace, not private chain-of-thought.

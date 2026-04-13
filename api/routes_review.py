@@ -65,6 +65,7 @@ async def submit_review_decision(decision: ReviewDecision, background_tasks: Bac
                 "status": "completed",
                 "final_answer": state_vals.get("final_answer"),
                 "summary": state_vals.get("final_summary") or state_vals.get("draft_summary"),
+                "summary_competition": state_vals.get("summary_competition"),
                 "saved_to_library": state_vals.get("saved_to_library"),
                 "error": state_vals.get("error"),
             })

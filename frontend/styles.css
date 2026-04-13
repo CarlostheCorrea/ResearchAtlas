@@ -1061,6 +1061,77 @@ body {
   border-top: 1px solid var(--border);
   padding-top: 12px;
 }
+.summary-competition-section {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: rgba(37, 99, 235, 0.04);
+}
+.summary-competition-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+.summary-competition-winner-line {
+  font-size: 12px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.summary-competition-rationale,
+.summary-competition-repair {
+  font-size: 10px;
+  color: var(--ink-2);
+  line-height: 1.4;
+  margin-top: 4px;
+}
+.summary-competition-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+.summary-competition-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ink-3);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+  background: var(--paper);
+}
+.summary-competition-card.selected {
+  border-left-color: var(--primary);
+}
+.summary-competition-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--ink);
+  font-weight: 600;
+}
+.summary-competition-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.summary-competition-faith.pass { color: #2e7d32; }
+.summary-competition-faith.fail { color: #c62828; }
+.summary-competition-faith.na { color: var(--ink-3); }
+.summary-competition-winner {
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  border-radius: 999px;
+  color: var(--primary);
+  padding: 1px 5px;
+}
 .summary-eval-title {
   font-size: 10px;
   font-weight: 600;

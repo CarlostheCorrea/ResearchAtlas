@@ -73,6 +73,7 @@ def _run_graph_background(session_id: str, initial_state: dict, config: dict):
             "final_answer": state_vals.get("final_answer"),
             "ranked_results": state_vals.get("ranked_results"),
             "summary": state_vals.get("final_summary") or state_vals.get("draft_summary"),
+            "summary_competition": state_vals.get("summary_competition"),
             "error": state_vals.get("error"),
         })
     except Exception as e:
@@ -113,6 +114,8 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         "final_answer": None,
         "retrieved_chunks": [],
         "draft_summary": None,
+        "summary_candidates": [],
+        "summary_competition": None,
         "ranked_results": [],
         "error": None,
     }

@@ -390,7 +390,7 @@ function startPolling(session_id) {
     'Downloading PDF...',
     'Extracting text...',
     'Building index...',
-    'Generating summary...',
+    'Generating competitive summaries...',
   ];
   let msgIdx = 0;
 
@@ -445,7 +445,7 @@ function renderProgressSteps(activeIdx) {
     'Downloading PDF',
     'Extracting & cleaning text',
     'Building semantic index',
-    'Generating structured summary',
+    'Generating competitive summaries',
   ];
   return `
     <div style="padding:16px;">
@@ -586,6 +586,42 @@ function renderSummaryEvaluation(evaluation) {
     </div>`;
 }
 
+function renderSummaryCompetition(competition) {
+  if (!competition || !Array.isArray(competition.scorecards) || competition.scorecards.length === 0) {
+    return '';
+  }
+
+  const repair = (competition.repair_status || 'not_needed').replace(/_/g, ' ');
+  const cardsHtml = competition.scorecards.map(card => {
+    const selected = card.selected ? ' selected' : '';
+    const faithClass = card.faithfulness === 'pass' ? 'pass' : card.faithfulness === 'fail' ? 'fail' : 'na';
+    const score = typeof card.score === 'number' ? card.score.toFixed(2) : '—';
+    return `
+      <div class="summary-competition-card${selected}">
+        <div class="summary-competition-head">
+          <span>${escHtml(card.rank ? `#${card.rank} · ${card.name}` : card.name || 'Candidate')}</span>
+          <strong>${escHtml(score)}</strong>
+        </div>
+        <div class="summary-competition-meta">
+          <span class="summary-competition-faith ${faithClass}">faithfulness ${escHtml(card.faithfulness || 'n/a')}</span>
+          ${card.selected ? '<span class="summary-competition-winner">winner</span>' : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="summary-competition-section">
+      <div class="summary-competition-title">Competitive Summary Selection</div>
+      <div class="summary-competition-winner-line">
+        Selected <strong>${escHtml(competition.winner_name || 'best candidate')}</strong>
+        ${typeof competition.winner_score === 'number' ? `with score ${escHtml(competition.winner_score.toFixed(2))}` : ''}.
+      </div>
+      <div class="summary-competition-rationale">${escHtml(competition.selection_rationale || '')}</div>
+      <div class="summary-competition-repair">Repair status: ${escHtml(repair)}</div>
+      <div class="summary-competition-grid">${cardsHtml}</div>
+    </div>`;
+}
+
 // ── Approval modal ─────────────────────────────────────────────────────────────
 function showApprovalModal(interruptPayload) {
   const modal = document.getElementById('approval-modal');
@@ -608,9 +644,11 @@ function showApprovalModal(interruptPayload) {
     title.textContent = 'Save this summary to your library?';
     const s = interruptPayload.draft_summary || {};
     const evalHtml = renderSummaryEvaluation(interruptPayload.summary_evaluation);
+    const competitionHtml = renderSummaryCompetition(interruptPayload.summary_competition);
     body.innerHTML = `
       <p style="margin-bottom:10px;">${escHtml(interruptPayload.message || '')}</p>
       ${s.overview ? `<div class="summary-preview-box">${escHtml(s.overview)}</div>` : ''}
+      ${competitionHtml}
       ${evalHtml}
     `;
     document.getElementById('btn-revise').classList.remove('hidden');

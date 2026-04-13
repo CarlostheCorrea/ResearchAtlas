@@ -367,6 +367,14 @@ class TestQAOrchestratorHelpers:
         assert _requested_download_tools("Give me both markdown and pdf.") == ["create_md", "create_pdf"]
         assert _requested_download_tools("Make a 3-slide class presentation.") == ["create_presentation"]
 
+    def test_content_artifact_requests_still_need_grounding(self):
+        from app.qa.orchestrator import _artifact_content_query, _content_artifact_needs_grounding
+
+        question = "Make me a MD file of the limitations of rougher texture and higher contrast in the generated images."
+
+        assert _content_artifact_needs_grounding(question) is True
+        assert _artifact_content_query(question) == "limitations of rougher texture and higher contrast in the generated images"
+
     def test_presentation_options_parse_slide_count_and_audience(self):
         from app.qa.orchestrator import _presentation_options
 
@@ -599,6 +607,32 @@ class TestQAEvaluationHelpers:
         assert calibrated["overall_status"] == "passed"
         assert calibrated["repair_recommended"] is False
         assert calibrated["calibration_notes"]
+
+    def test_tracking_calibration_scores_content_artifact_relevance(self):
+        from app.qa.evaluation import _calibrate_tracking
+
+        tracking = {
+            "answer_relevance": {"status": "not_applicable", "score": 1.0, "note": "Artifact created."},
+            "groundedness": {"status": "pass", "score": 0.8, "note": "Grounded."},
+            "citation_quality": {"status": "pass", "score": 0.8, "note": "Cited."},
+            "retrieval_relevance": {"status": "pass", "score": 0.8, "note": "Relevant."},
+            "tool_choice_quality": {"status": "pass", "score": 0.8, "note": "Good."},
+            "artifact_match": {"status": "pass", "score": 1.0, "note": "File created."},
+        }
+
+        calibrated = _calibrate_tracking(
+            tracking,
+            "Make me a MD file of the limitations.",
+            "The paper identifies limitations in the generated images.",
+            [{"section": "Limitations", "page": 4, "quote": "The generated images have limitations."}],
+            {"find_evidence": 1, "create_md": 1},
+            [{"kind": "markdown"}],
+            None,
+            {"items": [{"page": 4}]},
+        )
+
+        assert calibrated["answer_relevance"]["status"] == "pass"
+        assert calibrated["overall_status"] == "passed"
 
 
 class TestQAMcpHostDecoding:

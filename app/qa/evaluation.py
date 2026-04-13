@@ -47,13 +47,14 @@ Evaluate ONLY these two dimensions from the payload:
                      asserts paper content that no citation supports.
 
 IMPORTANT — ARTIFACT REQUEST RULE:
-If the question is primarily a request to CREATE A FILE (PDF, markdown, presentation,
-slide deck, image, graphic, etc.) AND the payload shows that assets were successfully
-generated (assets list is non-empty), mark answer_relevance as "not_applicable" with
-score 1.0. The generated file IS the answer — the text response is only a preview of
-the content. Do NOT penalise answer_relevance because the text does not say "here is
-your PDF"; the job was to create the file, which was done.
-Groundedness should still be evaluated normally against the text content and citations.
+If pure_artifact_transform is true, the user is only reformatting a previous answer
+into a file/image. In that case, mark answer_relevance as "not_applicable" with
+score 1.0 because no new content answer is being evaluated.
+If content_artifact_request is true, the user asked for a file ABOUT paper content
+(for example, "make an MD file of the limitations"). In that case, evaluate
+answer_relevance against the content requested, not the file format. The file format
+belongs to artifact_match; do not mark answer_relevance not_applicable.
+Groundedness should always be evaluated normally against the text content and citations.
 
 IMPORTANT — METADATA GROUNDING RULE:
 If the question asks about authorship, title, publication year/date, venue, journal,
@@ -95,8 +96,8 @@ Evaluate ONLY these four supporting dimensions from the payload:
                         tool_counts, tool_timeline, evidence_bundle, and citations.
                         tool_counts is the authoritative summary if the timeline
                         is truncated. Mark not_applicable if no retrieval tools
-                        were called and the answer came from metadata or a pure
-                        artifact transformation.
+                        were called and the answer came from metadata or
+                        pure_artifact_transform is true.
   tool_choice_quality — Were the right MCP tools called in a sensible sequence?
                         Fail if unnecessary tools were called or critical ones
                         were skipped.
@@ -173,6 +174,8 @@ def _artifact_requested(question: str) -> bool:
             "download",
             "pdf",
             "markdown",
+            "md file",
+            " md ",
             ".md",
             "image",
             "graphic",
@@ -180,6 +183,26 @@ def _artifact_requested(question: str) -> bool:
             "presentation",
         )
     )
+
+
+def _looks_like_status_only_answer(answer: str) -> bool:
+    text = (answer or "").strip().lower()
+    if not text:
+        return False
+    status_phrases = (
+        "generated the requested",
+        "see the downloads panel",
+        "see the generated graphic panel",
+        "downloadable file",
+        "created the requested",
+        "file from the previous answer",
+        "image from the previous answer",
+    )
+    return len(text) <= 300 and any(phrase in text for phrase in status_phrases)
+
+
+def _content_artifact_request(question: str, answer: str) -> bool:
+    return _artifact_requested(question) and not _looks_like_status_only_answer(answer)
 
 
 def _metadata_question(question: str) -> bool:
@@ -245,6 +268,18 @@ def _calibrate_tracking(
 ) -> dict[str, Any]:
     """Normalize obvious judge false negatives without hiding real failures."""
     notes: list[str] = []
+
+    answer_relevance = tracking.get("answer_relevance", {})
+    if (
+        answer_relevance.get("status") == "not_applicable"
+        and _content_artifact_request(question, answer)
+    ):
+        tracking["answer_relevance"] = metric(
+            "pass",
+            max(metric_score(answer_relevance), 0.8),
+            "Answer content addresses the paper-content part of the artifact request.",
+        )
+        notes.append("answer_relevance normalized: content artifact request had a substantive answer.")
 
     citation_quality = tracking.get("citation_quality", {})
     if (
@@ -465,11 +500,11 @@ def evaluate_qa_response(
         "tool_counts": tool_counts,
         "paper_metadata": paper_metadata,
         "repair_attempted": repair_attempted,
+        "pure_artifact_transform": False,
+        "content_artifact_request": _content_artifact_request(question, answer),
     }
-    # Include assets in the quality payload so the judge can apply the
-    # ARTIFACT REQUEST RULE — when a file was successfully created, the
-    # judge marks answer_relevance as not_applicable instead of penalising
-    # the text response for not saying "here is your PDF".
+    # Include assets and artifact flags so the judge evaluates the file format
+    # separately from the paper-content answer.
     quality_payload = {
         **base_payload,
         "assets": assets,

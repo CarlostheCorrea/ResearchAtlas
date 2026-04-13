@@ -35,6 +35,8 @@ class GraphState(TypedDict, total=False):
     draft_summary: Optional[dict]
     final_summary: Optional[dict]
     summary_evaluation: Optional[dict]   # LLM-as-judge scores for the summary
+    summary_candidates: list[dict]       # Competitive summary candidates and scorecards
+    summary_competition: Optional[dict]  # Selected winner metadata for human review
 
     # Q&A flow outputs
     question: str

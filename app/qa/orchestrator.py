@@ -42,6 +42,10 @@ def _requested_download_tools(question: str) -> list[str]:
     return []
 
 
+def _is_download_artifact_request(question: str) -> bool:
+    return bool(_requested_download_tools(question))
+
+
 def _presentation_options(question: str) -> dict[str, Any]:
     lowered = question.lower()
     slide_count = 1 if any(token in lowered for token in ("1 slide", "one slide", "one-slide", "single slide", "one-page slide")) else 3
@@ -88,6 +92,32 @@ def _needs_evidence(question: str) -> bool:
             "highlight",
         )
     )
+
+
+def _artifact_content_query(question: str) -> str:
+    """Convert "make me an MD/PDF of X" into the content question used for RAG."""
+    cleaned = re.sub(
+        r"\b(?:make|create|write|export|save|turn|convert|put|get|render|give)\b",
+        " ",
+        question,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"\b(?:me|a|an|file|download|downloadable|markdown|md|pdf|presentation|slide|slides|deck|html|as|format|formatted)\b",
+        " ",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,:;-")
+    cleaned = re.sub(r"^(?:of|about|on)\s+(?:the\s+)?", "", cleaned, flags=re.IGNORECASE)
+    if len(cleaned) < 12:
+        return question
+    return cleaned
+
+
+def _content_artifact_needs_grounding(question: str) -> bool:
+    """Artifact requests that are not continuations still need paper evidence."""
+    return _is_download_artifact_request(question) and not _is_continuation_request(question)
 
 
 def _needs_graphic(question: str) -> bool:
@@ -966,6 +996,32 @@ async def run_qa_orchestrator(session_id: str, question: str, arxiv_id: str, pro
             timeline.append(finished)
             progress(finished)
             tool_results.append({"tool": tool_name, "arguments": arguments, "result": result})
+
+        if _content_artifact_needs_grounding(question) and not _latest_evidence(tool_results):
+            content_query = _artifact_content_query(question)
+            _emit(
+                timeline,
+                progress,
+                _timeline_entry(
+                    "tool",
+                    "Running artifact evidence lookup",
+                    "This file request asks about paper content, so the orchestrator is collecting evidence before creating the download.",
+                    tool="find_evidence",
+                    status="running",
+                ),
+            )
+            raw = await _call_tool(session, "find_evidence", {"arxiv_id": arxiv_id, "question": content_query, "max_quotes": 6})
+            result = decode_tool_result(raw)
+            error_message = _tool_error_message(raw, result)
+            if error_message:
+                failed = _timeline_entry("tool", "Artifact evidence failed", error_message, tool="find_evidence", status="failed")
+                timeline.append(failed)
+                progress(failed)
+            else:
+                tool_results.append({"tool": "find_evidence", "arguments": {"arxiv_id": arxiv_id, "question": content_query}, "result": result})
+                fallback = _timeline_entry("tool", "Finished artifact evidence lookup", "Captured supporting evidence for the downloadable answer.", tool="find_evidence", status="completed")
+                timeline.append(fallback)
+                progress(fallback)
 
         if _needs_evidence(question) and not _latest_evidence(tool_results):
             _emit(
