@@ -32,7 +32,7 @@ Built with **FastAPI · LangGraph · MCP · ChromaDB · OpenAI · Arize Phoenix*
 ### 2 — Clone and install
 
 ``` bash
-git clone https://github.com/your-username/ResearchAtlas.git
+git clone https://github.com/CarlostheCorrea/ResearchAtlas.git
 cd ResearchAtlas
 pip install -r requirements.txt
 ```
