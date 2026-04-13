@@ -249,6 +249,35 @@ class TestQATools:
         assert "1. First finding." in pdf_text
         assert "2. Second finding." in pdf_text
 
+    def test_exports_strip_inline_citation_metadata_from_answer_body(self, tmp_path, monkeypatch):
+        import fitz
+        from app.qa import assets as qa_assets
+        from app.qa import mcp_server
+
+        monkeypatch.setattr(qa_assets, "QA_ASSETS_DIR", str(tmp_path / "qa_assets"))
+
+        polluted_answer = (
+            "The mission creates a spectroscopic survey of the Universe. "
+            '[{"section": "Paper Metadata", "page": null, "quote": "internal metadata"}, '
+            '{"section": "Abstract", "page": 1, "quote": "supporting quote"}]'
+        )
+
+        md_asset = json.loads(
+            mcp_server.create_md("sess-clean-meta", "SPACE Mission", "Make a summary.", polluted_answer, "[]")
+        )
+        pdf_asset = json.loads(
+            mcp_server.create_pdf("sess-clean-meta", "SPACE Mission", "Make a summary.", polluted_answer, "[]")
+        )
+
+        md_text = Path(md_asset["path"]).read_text(encoding="utf-8")
+        pdf_text = fitz.open(pdf_asset["path"])[0].get_text()
+
+        assert "The mission creates a spectroscopic survey of the Universe." in md_text
+        assert "Paper Metadata" not in md_text
+        assert '"section"' not in md_text
+        assert "Paper Metadata" not in pdf_text
+        assert '"section"' not in pdf_text
+
     def test_repeated_markdown_exports_get_unique_filenames(self, tmp_path, monkeypatch):
         from app.qa import assets as qa_assets
         from app.qa import mcp_server
@@ -358,6 +387,16 @@ class TestQATools:
 
 
 class TestQAOrchestratorHelpers:
+    def test_strip_inline_citation_metadata_handles_malformed_inline_blob(self):
+        from app.qa.text_utils import strip_inline_citation_metadata
+
+        answer = (
+            "Clean answer text. "
+            '["section": "Paper Metadata", "page": null, "quote": "internal metadata"]'
+        )
+
+        assert strip_inline_citation_metadata(answer) == "Clean answer text."
+
     def test_requested_download_tools_respect_requested_format(self):
         from app.qa.orchestrator import _requested_download_tools
 

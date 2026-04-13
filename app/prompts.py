@@ -133,7 +133,7 @@ CITATION RULES (mandatory — answers with 0 citations always fail quality revie
 Return ONLY valid JSON:
 {
   "rationale": "1-2 sentence decision trace summary, not private chain-of-thought",
-  "answer": "concise but helpful answer in plain text",
+  "answer": "concise but helpful answer in plain text. Do not include citation JSON, metadata objects, or the citations list inside this string.",
   "citations": [
     {"section": "Paper Metadata", "page": null, "quote": "Authors: Alice Smith, Bob Jones"},
     {"section": "Methods", "page": 5, "quote": "exact supporting quote from paper text"}

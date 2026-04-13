@@ -35,6 +35,7 @@ from app.mcp_server.tools_arxiv import get_paper_abstract, get_paper_metadata
 from app.mcp_server.tools_pdf import clean_pdf_text, download_pdf, extract_pdf_text, chunk_paper
 from app.mcp_server.tools_rag import get_paper_section, index_paper, retrieve_paper_chunks
 from app.qa.assets import ensure_assets_root, ensure_session_dir, record_asset
+from app.qa.text_utils import strip_inline_citation_metadata
 from app.rag.vectorstore import is_collection_compatible
 
 server = FastMCP(
@@ -197,6 +198,7 @@ def _parse_export_style(question: str) -> dict[str, Any]:
 
 def _build_markdown_document(title: str, question: str, answer: str, citations: list[dict]) -> str:
     style = _parse_export_style(question)
+    answer = strip_inline_citation_metadata(answer) or answer.strip()
     lines = [f"# {title}", "", f"## {style['heading']}", ""]
     if style["list_style"]:
         for index, point in enumerate(_extract_points(answer), start=1):
@@ -232,6 +234,7 @@ def _write_wrapped_lines(page, x: int, y: int, text: str, fontsize: int, width_c
 
 def _write_pdf(path: Path, title: str, question: str, answer: str, citations: list[dict]) -> None:
     style = _parse_export_style(question)
+    answer = strip_inline_citation_metadata(answer) or answer.strip()
     doc = fitz.open()
     page = doc.new_page()
     y = 48

@@ -15,6 +15,7 @@ from app.observability import trace_span
 from app.prompts import QA_MCP_PLANNER_PROMPT, QA_MCP_SYNTHESIS_PROMPT
 from app.qa.evaluation import evaluate_artifact_request, evaluate_qa_response, should_repair, tracking_score
 from app.qa.mcp_host import decode_tool_result, qa_mcp_session, read_json_resource
+from app.qa.text_utils import strip_inline_citation_metadata
 from app.rag.vectorstore import is_collection_compatible
 
 client = OpenAI(api_key=OPENAI_API_KEY, timeout=90.0)
@@ -455,7 +456,11 @@ def _synthesize_answer(question: str, metadata: dict[str, Any], tool_results: li
             response_format={"type": "json_object"},
             temperature=0.1,
         )
-    return json.loads(response.choices[0].message.content)
+    payload = json.loads(response.choices[0].message.content)
+    cleaned_answer = strip_inline_citation_metadata(payload.get("answer", ""))
+    if cleaned_answer:
+        payload["answer"] = cleaned_answer
+    return payload
 
 
 def _graphic_prompt(question: str, answer: str, metadata: dict[str, Any]) -> str:
