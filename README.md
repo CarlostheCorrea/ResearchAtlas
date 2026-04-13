@@ -6,6 +6,19 @@ Built with **FastAPI · LangGraph · MCP · ChromaDB · OpenAI · Arize Phoenix*
 
 ------------------------------------------------------------------------
 
+## Project overview
+
+ResearchAtlas is a local web app for exploring academic papers from arXiv. It is designed around a typical research workflow: search for papers, pick one, analyze the full PDF, save useful papers to a library, and ask follow-up questions that are grounded in the paper text.
+
+The app has two main AI paths:
+
+- **Analyze Paper** uses a LangGraph analysis pipeline. It downloads the selected PDF, extracts and indexes the text, generates multiple competing summary candidates, judges them, and shows the best 10-section summary for human approval before saving.
+- **Ask a Question** uses a standards-based MCP Q&A server. The FastAPI app acts as the MCP host, discovers available tools at runtime, calls tools such as evidence lookup, citation generation, Markdown/PDF export, image generation, and presentation creation, then evaluates the final answer with an LLM-as-judge.
+
+The goal is not only to summarize papers, but to make the research process visible. The UI shows tool calls, event logs, evaluation tracking, citations, generated assets, and saved-paper feedback so the user can see how each answer was produced and improve future ranking through ratings.
+
+------------------------------------------------------------------------
+
 ## What it does
 
 | Feature | Description |
