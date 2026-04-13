@@ -49,7 +49,7 @@ async def clear_library():
     return {"deleted": True, "count": count, "chroma_collections_deleted": chroma_deleted, "pdfs_deleted": pdf_deleted}
 
 
-@router.delete("/api/library/{arxiv_id}")
+@router.delete("/api/library/{arxiv_id:path}")
 async def remove_from_library(arxiv_id: str):
     """Remove a single paper from the research library and clear its RAG memory."""
     deleted = db.delete_saved_paper(arxiv_id)
@@ -71,7 +71,7 @@ async def remove_from_library(arxiv_id: str):
     return {"deleted": True, "arxiv_id": arxiv_id, "rag_cleared": True, "pdf_deleted": pdf_deleted}
 
 
-@router.post("/api/library/{arxiv_id}/rating")
+@router.post("/api/library/{arxiv_id:path}/rating")
 async def save_rating(arxiv_id: str, body: RatingRequest):
     """Persist a star rating on the saved_papers row so it survives page changes."""
     if not 1 <= body.rating <= 5:
@@ -80,7 +80,7 @@ async def save_rating(arxiv_id: str, body: RatingRequest):
     return {"saved": True, "arxiv_id": arxiv_id, "rating": body.rating}
 
 
-@router.post("/api/library/{arxiv_id}/feedback")
+@router.post("/api/library/{arxiv_id:path}/feedback")
 async def submit_feedback(arxiv_id: str, body: FeedbackRequest):
     """Rate a saved paper 1-5. Updates user preference weights."""
     if not 1 <= body.rating <= 5:

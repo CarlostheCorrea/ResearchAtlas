@@ -1292,7 +1292,7 @@ async function clearLibrary() {
 
 async function removeFromLibrary(arxiv_id) {
   try {
-    await apiDelete(`/api/library/${arxiv_id}`);
+    await apiDelete(`/api/library/${encodeURIComponent(arxiv_id)}`);
     // Remove card from DOM without full reload
     const card = document.querySelector(`.library-card[data-arxiv="${arxiv_id}"]`);
     if (card) card.remove();
@@ -1307,7 +1307,7 @@ async function removeFromLibrary(arxiv_id) {
 async function submitFeedback(arxiv_id, rating, comment = '') {
   try {
     // /feedback saves to both saved_papers.rating AND paper_feedback + updates prefs
-    await apiPost(`/api/library/${arxiv_id}/feedback`, { rating, comment });
+    await apiPost(`/api/library/${encodeURIComponent(arxiv_id)}/feedback`, { rating, comment });
     showToast('Rating saved — preferences updated', 'success');
   } catch (err) {
     showToast(err.message, 'error');
