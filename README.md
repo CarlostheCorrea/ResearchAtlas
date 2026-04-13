@@ -45,7 +45,7 @@ cp .env.example .env
 
 Open `.env` and set your key:
 
-```
+```         
 OPENAI_API_KEY=
 ```
 
@@ -67,9 +67,9 @@ bash start.sh
 
 This starts all three servers in the background and prints their URLs:
 
-- **App** → `http://localhost:8000` — FastAPI app + frontend
-- **Tools** → `http://localhost:8001` — Internal tool server
-- **Phoenix** → `http://localhost:6006` — Arize Phoenix UI *(optional)*
+-   **App** → `http://localhost:8000` — FastAPI app + frontend
+-   **Tools** → `http://localhost:8001` — Internal tool server
+-   **Phoenix** → `http://localhost:6006` — Arize Phoenix UI *(optional)*
 
 Press `Ctrl+C` once to stop all servers cleanly.
 
@@ -78,7 +78,8 @@ Press `Ctrl+C` once to stop all servers cleanly.
 > **Start without Phoenix:** Comment out the `python -m phoenix.server.main serve &` line in `start.sh` before running.
 
 > **Prefer separate terminals?** You can run each server manually instead:
-> ```bash
+>
+> ``` bash
 > # Terminal 1
 > uvicorn app.main:app --reload --port 8000
 > # Terminal 2
@@ -94,6 +95,110 @@ Press `Ctrl+C` once to stop all servers cleanly.
 ``` bash
 open http://localhost:8000
 ```
+
+------------------------------------------------------------------------
+
+## Windows Setup
+
+### 1 — Prerequisites
+
+-   **Python 3.11+** — download from [python.org](https://www.python.org/downloads/). During install, check **"Add Python to PATH"**
+-   **Git for Windows** — download from [git-scm.com](https://git-scm.com/download/win). This includes **Git Bash**, which is needed to run `start.sh`
+
+### 2 — Clone and install
+
+Open **Git Bash** and run:
+
+``` bash
+git clone https://github.com/your-username/ResearchAtlas.git
+cd ResearchAtlas
+pip install -r requirements.txt
+```
+
+### 3 — Configure environment
+
+In Git Bash:
+
+``` bash
+cp .env.example .env
+```
+
+Or in PowerShell:
+
+``` powershell
+copy .env.example .env
+```
+
+Open `.env` with any text editor (Notepad, VS Code) and set your key:
+
+```         
+OPENAI_API_KEY=...
+```
+
+### 4 — Create data directories
+
+In Git Bash:
+
+``` bash
+mkdir -p data/pdfs data/vectorstore data/qa_assets
+```
+
+Or in PowerShell:
+
+``` powershell
+New-Item -ItemType Directory -Force data\pdfs, data\vectorstore, data\qa_assets
+```
+
+### 5 — Start the servers
+
+**Option A — Git Bash (recommended)**
+
+``` bash
+bash start.sh
+```
+
+**Option B — PowerShell (three separate terminals)**
+
+`start.sh` is a bash script and does not run natively in PowerShell. Open three separate PowerShell windows and run one command in each:
+
+``` powershell
+# Terminal 1 — Main app
+uvicorn app.main:app --reload --port 8000
+```
+
+``` powershell
+# Terminal 2 — Internal tool server
+uvicorn app.mcp_server.server:app --reload --port 8001
+```
+
+``` powershell
+# Terminal 3 — Phoenix (optional)
+python -m phoenix.server.main serve
+```
+
+### 6 — Open the app
+
+In your browser navigate to:
+
+```         
+http://localhost:8000
+```
+
+Or in PowerShell:
+
+``` powershell
+start http://localhost:8000
+```
+
+### Windows Troubleshooting
+
+**`python` not found** — use `py` instead of `python` if you installed from the Microsoft Store, or reinstall from python.org and check "Add to PATH".
+
+**`pip install` fails with permission error** — run Git Bash or PowerShell as Administrator, or add `--user` flag: `pip install --user -r requirements.txt`.
+
+**`start.sh` not running in PowerShell** — use Git Bash instead (`bash start.sh`), or use the three-terminal PowerShell approach above.
+
+**Port already in use** — run `netstat -ano | findstr :8000` in PowerShell to find the process, then `taskkill /PID <pid> /F` to stop it.
 
 ------------------------------------------------------------------------
 
@@ -113,7 +218,7 @@ When Phoenix is running, the **Tracking** tab in the Q&A panel shows a "View tra
 
 To disable the LLM judge (faster, no extra API calls):
 
-```
+```         
 QA_JUDGE_ENABLED=false
 ```
 
@@ -140,7 +245,7 @@ QA_JUDGE_ENABLED=false
 
 ## Project Structure
 
-```
+```         
 ResearchAtlas/
 ├── app/
 │   ├── main.py                  # FastAPI app, startup, Phoenix init
@@ -186,7 +291,7 @@ ResearchAtlas/
 
 ## Architecture
 
-```
+```         
 ┌─────────────────────────────────────────────────────────────────┐
 │  Browser  (localhost:8000)                                       │
 │  Static frontend — no build step, served by FastAPI             │
@@ -230,7 +335,7 @@ Storage:
 
 Every question goes through this pipeline:
 
-```
+```         
 Question
   │
   ▼

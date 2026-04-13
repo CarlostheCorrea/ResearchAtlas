@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ResearchAtlas Agent Workflow</title>
+<style>body{margin:0;padding:0;background:#0d1117;}svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;}</style>
+</head><body>
+<svg width="1600" height="1740" viewBox="0 0 1600 1740" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="mGray"   markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#8b949e"/></marker>
+  <marker id="mGreen"  markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#3fb950"/></marker>
+  <marker id="mPurple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#bc8cff"/></marker>
+  <marker id="mPink"   markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#e87899"/></marker>
+  <marker id="mTeal"   markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#39c5cf"/></marker>
+  <marker id="mRed"    markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#f85149"/></marker>
+  <marker id="mYellow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#d29922"/></marker>
+</defs>
+
+<!-- BG -->
+<rect width="1600" height="1740" fill="#0d1117"/>
+
+<!-- LANE BACKGROUNDS -->
+<rect x="40"   y="298" width="490" height="780" rx="10" fill="#0e130e" opacity="0.6"/>
+<rect x="550"  y="298" width="500" height="820" rx="10" fill="#0e0c15" opacity="0.6"/>
+<rect x="1070" y="298" width="490" height="480" rx="10" fill="#130c10" opacity="0.6"/>
+
+<!-- TITLE -->
+<text x="800" y="46" text-anchor="middle" font-size="26" font-weight="700" fill="#e6edf3">ResearchAtlas &#8212; Agent Workflow</text>
+<text x="800" y="72" text-anchor="middle" font-size="12" fill="#8b949e">LangGraph multi-agent pipeline &#183; OpenAI GPT-4o &#183; MCP tools &#183; Human-in-the-loop interrupts</text>
+<line x1="40" y1="88" x2="1560" y2="88" stroke="#30363d" stroke-width="1"/>
+
+<!-- USER REQUEST box: cx=800 cy=122 w=300 h=50 -->
+<rect x="650" y="97"  width="300" height="50" rx="8" fill="#161b22" stroke="#39c5cf" stroke-width="2"/>
+<rect x="650" y="97"  width="300" height="9"  rx="4" fill="#39c5cf"/>
+<text x="800" y="127" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">User Request</text>
+<text x="800" y="141" text-anchor="middle" font-size="11" fill="#8b949e">/api/search  or  /api/chat</text>
+<line x1="800" y1="147" x2="800" y2="167" stroke="#8b949e" stroke-width="1.5" marker-end="url(#mGray)"/>
+
+<!-- MANAGER AGENT box: cx=800 cy=197 w=420 h=50 -->
+<rect x="590" y="172" width="420" height="50" rx="8" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+<rect x="590" y="172" width="420" height="9"  rx="4" fill="#58a6ff"/>
+<text x="800" y="202" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Manager Agent</text>
+<text x="800" y="216" text-anchor="middle" font-size="11" fill="#8b949e">Intent classification &#183; GPT-4o &#183; loads user preferences</text>
+<line x1="800" y1="222" x2="800" y2="244" stroke="#8b949e" stroke-width="1.5" marker-end="url(#mGray)"/>
+
+<!-- INTENT LABEL -->
+<text x="800" y="257" text-anchor="middle" font-size="11" fill="#8b949e" font-style="italic">intent &#8712; { discover &#160; | &#160; analyze_paper &#160; | &#160; ask_question &#160; | &#160; save_or_review }</text>
+
+<!-- SPLIT LINE -->
+<line x1="230" y1="276" x2="1420" y2="276" stroke="#30363d" stroke-width="1.5"/>
+<line x1="285" y1="276" x2="285" y2="299" stroke="#30363d" stroke-width="1.5"/>
+<line x1="800" y1="276" x2="800" y2="299" stroke="#30363d" stroke-width="1.5"/>
+<line x1="1315" y1="276" x2="1315" y2="299" stroke="#30363d" stroke-width="1.5"/>
+<line x1="800"  y1="268" x2="800"  y2="277" stroke="#8b949e" stroke-width="1.5" marker-end="url(#mGray)"/>
+
+<!-- ===================== DISCOVER (x=285) ===================== -->
+<rect x="218" y="299" width="134" height="24" rx="12" fill="#1c2128" stroke="#3fb950" stroke-width="1.2"/>
+<text x="285" y="315" text-anchor="middle" font-size="11" font-weight="700" fill="#3fb950">DISCOVER</text>
+<line x1="285" y1="323" x2="285" y2="341" stroke="#3fb950" stroke-width="1.5" marker-end="url(#mGreen)"/>
+
+<!-- Search Agent: cx=285 cy=369 w=310 h=50 -->
+<rect x="130" y="343" width="310" height="50" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+<rect x="130" y="343" width="310" height="9"  rx="4" fill="#3fb950"/>
+<text x="285" y="373" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Search Agent</text>
+<text x="285" y="387" text-anchor="middle" font-size="11" fill="#8b949e">MCP: search_papers &#183; arXiv API</text>
+<line x1="285" y1="393" x2="285" y2="413" stroke="#3fb950" stroke-width="1.5" marker-end="url(#mGreen)"/>
+
+<!-- Pre-Filter Agent: cx=285 cy=441 w=310 h=50 -->
+<rect x="130" y="415" width="310" height="50" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+<rect x="130" y="415" width="310" height="9"  rx="4" fill="#3fb950"/>
+<text x="285" y="445" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Pre-Filter Agent</text>
+<text x="285" y="459" text-anchor="middle" font-size="11" fill="#8b949e">Deterministic &#183; 6 filter rules &#183; zero LLM cost</text>
+<line x1="285" y1="465" x2="285" y2="492" stroke="#3fb950" stroke-width="1.5" marker-end="url(#mGreen)"/>
+<text x="310" y="481" font-size="10" fill="#3fb950" font-style="italic">filtered?</text>
+
+<!-- Conditional split at y=505 -->
+<line x1="130" y1="505" x2="440" y2="505" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
+<line x1="160" y1="505" x2="160" y2="523" stroke="#f85149" stroke-width="1.3"/>
+<line x1="410" y1="505" x2="410" y2="523" stroke="#3fb950" stroke-width="1.3"/>
+<text x="120" y="500" font-size="10" fill="#f85149" font-style="italic" text-anchor="middle">empty</text>
+<text x="450" y="500" font-size="10" fill="#3fb950" font-style="italic">results</text>
+
+<!-- No Results: cx=160 cy=551 w=220 h=50 -->
+<rect x="50"  y="525" width="220" height="50" rx="8" fill="#161b22" stroke="#f85149" stroke-width="1.8"/>
+<rect x="50"  y="525" width="220" height="9"  rx="4" fill="#f85149"/>
+<text x="160" y="555" text-anchor="middle" font-size="13" font-weight="700" fill="#e6edf3">No Results</text>
+<text x="160" y="569" text-anchor="middle" font-size="10" fill="#8b949e">Error &#8594; frontend &#183; END</text>
+
+<!-- Ranking Agent: cx=410 cy=551 w=240 h=50 -->
+<rect x="290" y="525" width="240" height="50" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+<rect x="290" y="525" width="240" height="9"  rx="4" fill="#3fb950"/>
+<text x="410" y="555" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Ranking Agent</text>
+<text x="410" y="569" text-anchor="middle" font-size="11" fill="#8b949e">GPT-4o &#183; composite score</text>
+<line x1="410" y1="575" x2="410" y2="603" stroke="#3fb950" stroke-width="1.5" marker-end="url(#mGreen)"/>
+
+<!-- Ranked Results: cx=410 cy=631 w=260 h=50 -->
+<rect x="280" y="605" width="260" height="50" rx="8" fill="#0d2018" stroke="#39c5cf" stroke-width="2"/>
+<rect x="280" y="605" width="260" height="9"  rx="4" fill="#39c5cf"/>
+<text x="410" y="635" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Ranked Results</text>
+<text x="410" y="649" text-anchor="middle" font-size="11" fill="#8b949e">Returned to frontend &#183; END</text>
+
+<!-- Scoring detail box -->
+<rect x="60" y="680" width="450" height="82" rx="8" fill="#0e130e" stroke="#2a3a2a" stroke-width="1"/>
+<text x="285" y="700" text-anchor="middle" font-size="11" font-weight="700" fill="#3fb950">Scoring (topic mode)</text>
+<text x="285" y="718" text-anchor="middle" font-size="10" fill="#8b949e">Relevance (LLM) &#215; 0.5 &#160;&#183;&#160; Recency &#215; 0.3 &#160;&#183;&#160; Pref-match &#215; 0.2</text>
+<text x="285" y="734" text-anchor="middle" font-size="10" fill="#8b949e">Author mode: deterministic (no LLM)</text>
+<text x="285" y="750" text-anchor="middle" font-size="10" fill="#8b949e">Pre-filter drops 70-80% before LLM scoring</text>
+
+<!-- ===================== ANALYZE (x=800) ===================== -->
+<rect x="722" y="299" width="156" height="24" rx="12" fill="#1c2128" stroke="#bc8cff" stroke-width="1.2"/>
+<text x="800" y="315" text-anchor="middle" font-size="11" font-weight="700" fill="#bc8cff">ANALYZE PAPER</text>
+<line x1="800" y1="323" x2="800" y2="341" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#mPurple)"/>
+
+<!-- Human Gate 1 DIAMOND: cx=800 cy=393 hw=92 hh=52 -->
+<polygon points="800,341 892,393 800,445 708,393" fill="#2d1e0f" stroke="#f0883e" stroke-width="2.2"/>
+<text x="800" y="389" text-anchor="middle" font-size="12" font-weight="700" fill="#f0883e">Human Gate 1</text>
+<text x="800" y="405" text-anchor="middle" font-size="10" fill="#8b949e">Approve download?</text>
+
+<!-- Gate1 REJECT path: left(708,393) -> END -->
+<line x1="708" y1="393" x2="618" y2="393" stroke="#f85149" stroke-width="1.5"/>
+<line x1="618" y1="393" x2="618" y2="420" stroke="#f85149" stroke-width="1.5" marker-end="url(#mRed)"/>
+<text x="660"  y="388" text-anchor="middle" font-size="10" fill="#f85149" font-style="italic">reject</text>
+<rect x="528" y="422" width="180" height="44" rx="8" fill="#1a0c0c" stroke="#f85149" stroke-width="1.5" stroke-dasharray="5,3"/>
+<text x="618" y="447" text-anchor="middle" font-size="13" font-weight="700" fill="#f85149">END</text>
+<text x="618" y="460" text-anchor="middle" font-size="10" fill="#8b949e">rejected</text>
+
+<!-- Gate1 APPROVE path: bottom(800,445) -> Ingestion -->
+<line x1="800" y1="445" x2="800" y2="468" stroke="#3fb950" stroke-width="1.5" marker-end="url(#mGreen)"/>
+<text x="818"  y="460" font-size="10" fill="#3fb950" font-style="italic">approve</text>
+
+<!-- Ingestion Agent: cx=800 cy=497 w=390 h=50 -->
+<rect x="605" y="470" width="390" height="50" rx="8" fill="#161b22" stroke="#bc8cff" stroke-width="2"/>
+<rect x="605" y="470" width="390" height="9"  rx="4" fill="#bc8cff"/>
+<text x="800" y="500" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Ingestion Agent</text>
+<text x="800" y="514" text-anchor="middle" font-size="11" fill="#8b949e">download &#8594; extract &#8594; clean &#8594; chunk &#8594; index</text>
+
+<!-- MCP chip row 1 (3 chips) -->
+<rect x="623" y="528" width="108" height="22" rx="5" fill="#1a1030" stroke="#bc8cff" stroke-width="0.8"/><text x="677" y="543" text-anchor="middle" font-size="9" fill="#bc8cff">download_pdf</text>
+<rect x="739" y="528" width="128" height="22" rx="5" fill="#1a1030" stroke="#bc8cff" stroke-width="0.8"/><text x="803" y="543" text-anchor="middle" font-size="9" fill="#bc8cff">extract_pdf_text</text>
+<rect x="875" y="528" width="118" height="22" rx="5" fill="#1a1030" stroke="#bc8cff" stroke-width="0.8"/><text x="934" y="543" text-anchor="middle" font-size="9" fill="#bc8cff">clean_pdf_text</text>
+<!-- MCP chip row 2 (2 chips) -->
+<rect x="700" y="554" width="100" height="22" rx="5" fill="#1a1030" stroke="#bc8cff" stroke-width="0.8"/><text x="750" y="569" text-anchor="middle" font-size="9" fill="#bc8cff">chunk_paper</text>
+<rect x="808" y="554" width="96"  height="22" rx="5" fill="#1a1030" stroke="#bc8cff" stroke-width="0.8"/><text x="856" y="569" text-anchor="middle" font-size="9" fill="#bc8cff">index_paper</text>
+<line x1="800" y1="580" x2="800" y2="606" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#mPurple)"/>
+
+<!-- Summary Agent: cx=800 cy=635 w=390 h=50 -->
+<rect x="605" y="608" width="390" height="50" rx="8" fill="#161b22" stroke="#bc8cff" stroke-width="2"/>
+<rect x="605" y="608" width="390" height="9"  rx="4" fill="#bc8cff"/>
+<text x="800" y="638" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Summary Agent</text>
+<text x="800" y="652" text-anchor="middle" font-size="11" fill="#8b949e">3-pass retrieval &#183; 3-candidate competition &#183; LLM-as-judge</text>
+
+<!-- Competition detail box -->
+<rect x="590" y="668" width="420" height="106" rx="8" fill="#160c22" stroke="#3a2050" stroke-width="1.2"/>
+<text x="800" y="688" text-anchor="middle" font-size="12" font-weight="700" fill="#bc8cff">Competitive Summary Generation</text>
+<rect x="600" y="696" width="118" height="24" rx="6" fill="#1c1430" stroke="#9a9a9a" stroke-width="0.8"/><text x="659" y="712" text-anchor="middle" font-size="10" fill="#cccccc">Conservative T=0</text>
+<rect x="741" y="696" width="118" height="24" rx="6" fill="#1c1430" stroke="#58a6ff" stroke-width="0.8"/><text x="800" y="712" text-anchor="middle" font-size="10" fill="#58a6ff">Technical T=0.2</text>
+<rect x="882" y="696" width="118" height="24" rx="6" fill="#1c1430" stroke="#39c5cf" stroke-width="0.8"/><text x="941" y="712" text-anchor="middle" font-size="10" fill="#39c5cf">Teaching T=0.2</text>
+<text x="800" y="738" text-anchor="middle" font-size="10" fill="#8b949e">LLM judge: faithfulness &#183; specificity &#183; completeness &#183; section_accuracy</text>
+<text x="800" y="756" text-anchor="middle" font-size="10" fill="#8b949e">Auto-repair pass if winning candidate fails faithfulness check</text>
+<line x1="800" y1="774" x2="800" y2="800" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#mPurple)"/>
+
+<!-- Human Gate 2 DIAMOND: cx=800 cy=852 hw=92 hh=52 -->
+<polygon points="800,800 892,852 800,904 708,852" fill="#2d1e0f" stroke="#f0883e" stroke-width="2.2"/>
+<text x="800" y="848" text-anchor="middle" font-size="12" font-weight="700" fill="#f0883e">Human Gate 2</text>
+<text x="800" y="864" text-anchor="middle" font-size="10" fill="#8b949e">Approve summary?</text>
+
+<!-- Gate2 REJECT: left(708,852) -> END -->
+<line x1="708" y1="852" x2="612" y2="852" stroke="#f85149" stroke-width="1.5"/>
+<line x1="612" y1="852" x2="612" y2="879" stroke="#f85149" stroke-width="1.5" marker-end="url(#mRed)"/>
+<text x="658"  y="846" text-anchor="middle" font-size="10" fill="#f85149" font-style="italic">reject</text>
+<rect x="522" y="881" width="180" height="44" rx="8" fill="#1a0c0c" stroke="#f85149" stroke-width="1.5" stroke-dasharray="5,3"/>
+<text x="612" y="906" text-anchor="middle" font-size="13" font-weight="700" fill="#f85149">END</text>
+<text x="612" y="919" text-anchor="middle" font-size="10" fill="#8b949e">rejected — not saved</text>
+
+<!-- Gate2 REVISE: right(892,852) curved back to Summary Agent right edge -->
+<path d="M 892,852 C 1045,852 1045,635 995,635" fill="none" stroke="#d29922" stroke-width="1.8" stroke-dasharray="6,3" marker-end="url(#mYellow)"/>
+<text x="1042" y="756" font-size="10" fill="#d29922" font-style="italic" text-anchor="middle">revise</text>
+<text x="1042" y="769" font-size="10" fill="#d29922" font-style="italic" text-anchor="middle">+ revision_note</text>
+
+<!-- Gate2 APPROVE: bottom(800,904) -> Memory -->
+<line x1="800" y1="904" x2="800" y2="930" stroke="#3fb950" stroke-width="1.5" marker-end="url(#mGreen)"/>
+<text x="820"  y="921" font-size="10" fill="#3fb950" font-style="italic">approve</text>
+
+<!-- Memory Agent: cx=800 cy=959 w=360 h=50 -->
+<rect x="620" y="932" width="360" height="50" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+<rect x="620" y="932" width="360" height="9"  rx="4" fill="#3fb950"/>
+<text x="800" y="962" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Memory Agent</text>
+<text x="800" y="976" text-anchor="middle" font-size="11" fill="#8b949e">MCP: save_to_library &#183; SQLite &#183; update weights</text>
+<line x1="800" y1="982" x2="800" y2="1008" stroke="#39c5cf" stroke-width="1.5" marker-end="url(#mTeal)"/>
+
+<!-- END Saved: cx=800 cy=1037 w=300 h=50 -->
+<rect x="650" y="1010" width="300" height="50" rx="8" fill="#0d2018" stroke="#39c5cf" stroke-width="2"/>
+<rect x="650" y="1010" width="300" height="9"  rx="4" fill="#39c5cf"/>
+<text x="800" y="1040" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">END &#8212; Paper Saved</text>
+<text x="800" y="1054" text-anchor="middle" font-size="11" fill="#8b949e">Added to research library</text>
+
+<!-- ===================== QA BRANCH (x=1315) ===================== -->
+<rect x="1238" y="299" width="154" height="24" rx="12" fill="#1c2128" stroke="#e87899" stroke-width="1.2"/>
+<text x="1315" y="315" text-anchor="middle" font-size="11" font-weight="700" fill="#e87899">ASK QUESTION</text>
+<line x1="1315" y1="323" x2="1315" y2="349" stroke="#e87899" stroke-width="1.5" marker-end="url(#mPink)"/>
+
+<!-- "paper indexed?" text + split -->
+<text x="1315" y="362" text-anchor="middle" font-size="11" fill="#8b949e" font-style="italic">paper indexed?</text>
+<line x1="1185" y1="373" x2="1445" y2="373" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
+<line x1="1205" y1="373" x2="1205" y2="393" stroke="#f85149" stroke-width="1.3"/>
+<line x1="1425" y1="373" x2="1425" y2="393" stroke="#3fb950" stroke-width="1.3"/>
+<text x="1175" y="369" font-size="10" fill="#f85149" font-style="italic" text-anchor="end">no</text>
+<text x="1448" y="369" font-size="10" fill="#3fb950" font-style="italic">yes</text>
+
+<!-- NO path: curved arrow left to Human Gate 1 right vertex(892,393) -->
+<path d="M 1205,393 C 1100,393 1000,393 892,393" fill="none" stroke="#f85149" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#mRed)"/>
+<text x="1055" y="412" text-anchor="middle" font-size="10" fill="#f85149" font-style="italic">analyze first</text>
+
+<!-- YES path: (1425,393) -> down -> center -> Retrieval Agent -->
+<line x1="1425" y1="393" x2="1425" y2="415" stroke="#3fb950" stroke-width="1.3"/>
+<line x1="1315" y1="415" x2="1425" y2="415" stroke="#3fb950" stroke-width="1.3"/>
+<line x1="1315" y1="415" x2="1315" y2="435" stroke="#3fb950" stroke-width="1.5" marker-end="url(#mGreen)"/>
+
+<!-- Retrieval Agent: cx=1315 cy=464 w=340 h=50 -->
+<rect x="1145" y="437" width="340" height="50" rx="8" fill="#161b22" stroke="#e87899" stroke-width="2"/>
+<rect x="1145" y="437" width="340" height="9"  rx="4" fill="#e87899"/>
+<text x="1315" y="467" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Retrieval Agent</text>
+<text x="1315" y="481" text-anchor="middle" font-size="11" fill="#8b949e">MCP: retrieve_paper_chunks &#183; k=5</text>
+<line x1="1315" y1="487" x2="1315" y2="513" stroke="#e87899" stroke-width="1.5" marker-end="url(#mPink)"/>
+
+<!-- QA Agent: cx=1315 cy=541 w=340 h=50 -->
+<rect x="1145" y="515" width="340" height="50" rx="8" fill="#161b22" stroke="#e87899" stroke-width="2"/>
+<rect x="1145" y="515" width="340" height="9"  rx="4" fill="#e87899"/>
+<text x="1315" y="545" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Q&amp;A Agent</text>
+<text x="1315" y="559" text-anchor="middle" font-size="11" fill="#8b949e">GPT-4o &#183; T=0.1 &#183; context-only grounding</text>
+
+<!-- QA constraint box -->
+<rect x="1140" y="573" width="350" height="66" rx="8" fill="#1a0c12" stroke="#3a1828" stroke-width="1.2"/>
+<text x="1315" y="593" text-anchor="middle" font-size="11" font-weight="700" fill="#e87899">Never answers from general knowledge</text>
+<text x="1315" y="611" text-anchor="middle" font-size="10" fill="#8b949e">Grounded strictly in retrieved chunks</text>
+<text x="1315" y="627" text-anchor="middle" font-size="10" fill="#8b949e">Refuses if evidence absent &#183; cites section names</text>
+<line x1="1315" y1="639" x2="1315" y2="663" stroke="#39c5cf" stroke-width="1.5" marker-end="url(#mTeal)"/>
+
+<!-- Final Answer: cx=1315 cy=692 w=300 h=50 -->
+<rect x="1165" y="665" width="300" height="50" rx="8" fill="#0d2018" stroke="#39c5cf" stroke-width="2"/>
+<rect x="1165" y="665" width="300" height="9"  rx="4" fill="#39c5cf"/>
+<text x="1315" y="695" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Final Answer</text>
+<text x="1315" y="709" text-anchor="middle" font-size="11" fill="#8b949e">answer + section citations &#183; END</text>
+
+<!-- ===================== GRAPHSTATE BOX ===================== -->
+<rect x="40" y="1110" width="1520" height="240" rx="12" fill="#0f1624" stroke="#2a3550" stroke-width="1.8"/>
+<text x="800" y="1138" text-anchor="middle" font-size="14" font-weight="700" fill="#58a6ff">GraphState &#8212; Shared LangGraph TypedDict (one instance per session thread)</text>
+<line x1="60" y1="1148" x2="1540" y2="1148" stroke="#2a3550" stroke-width="0.8"/>
+
+<!-- Row 1 of state fields -->
+<text x="80"   y="1168" font-size="11" font-weight="700" fill="#39c5cf">User Inputs</text>
+<text x="80"   y="1184" font-size="10" fill="#8b949e">session_id &#183; user_query &#183; selected_arxiv_id</text>
+<text x="460"  y="1168" font-size="11" font-weight="700" fill="#58a6ff">Manager Outputs</text>
+<text x="460"  y="1184" font-size="10" fill="#8b949e">intent &#183; user_preferences</text>
+<text x="840"  y="1168" font-size="11" font-weight="700" fill="#3fb950">Discovery Outputs</text>
+<text x="840"  y="1184" font-size="10" fill="#8b949e">raw_results &#183; filter_report &#183; ranked_results</text>
+<text x="1220" y="1168" font-size="11" font-weight="700" fill="#bc8cff">Analysis Outputs</text>
+<text x="1220" y="1184" font-size="10" fill="#8b949e">pdf_path &#183; chunks &#183; draft_summary &#183; evaluation</text>
+
+<line x1="60" y1="1202" x2="1540" y2="1202" stroke="#2a3550" stroke-width="0.6"/>
+
+<!-- Row 2 of state fields -->
+<text x="80"   y="1222" font-size="11" font-weight="700" fill="#e87899">Q&amp;A Outputs</text>
+<text x="80"   y="1238" font-size="10" fill="#8b949e">question &#183; retrieved_chunks &#183; final_answer</text>
+<text x="460"  y="1222" font-size="11" font-weight="700" fill="#f0883e">Human-in-Loop</text>
+<text x="460"  y="1238" font-size="10" fill="#8b949e">approval_status &#183; revision_note</text>
+<text x="840"  y="1222" font-size="11" font-weight="700" fill="#3fb950">Memory Outputs</text>
+<text x="840"  y="1238" font-size="10" fill="#8b949e">saved_to_library &#183; weights_updated</text>
+<text x="1220" y="1222" font-size="11" font-weight="700" fill="#f85149">Error Handling</text>
+<text x="1220" y="1238" font-size="10" fill="#8b949e">error field</text>
+
+<line x1="60" y1="1256" x2="1540" y2="1256" stroke="#2a3550" stroke-width="0.6"/>
+<text x="800" y="1276" text-anchor="middle" font-size="10" fill="#8b949e" font-style="italic">Persisted via SqliteSaver checkpointer &#183; survives interrupt/resume cycles &#183; frontend polls GET /api/chat/status/{session_id}</text>
+<text x="800" y="1293" text-anchor="middle" font-size="10" fill="#8b949e" font-style="italic">Session management: in-memory _sessions dict + SqliteSaver &#183; graph resumed with Command(resume=decision)</text>
+<text x="800" y="1310" text-anchor="middle" font-size="10" fill="#8b949e" font-style="italic">Routes: POST /api/search (discover) &#183; POST /api/chat (analyze/qa) &#183; POST /api/review/decide (resume after interrupt)</text>
+
+<!-- ===================== INFRASTRUCTURE ===================== -->
+<text x="800" y="1378" text-anchor="middle" font-size="14" font-weight="700" fill="#58a6ff">Persistence &amp; Infrastructure</text>
+
+<!-- SQLite: cx=155 -->
+<rect x="45"   y="1390" width="220" height="106" rx="8" fill="#161b22" stroke="#d29922" stroke-width="1.5"/>
+<text x="155"  y="1418" text-anchor="middle" font-size="13" font-weight="700" fill="#d29922">SQLite DB</text>
+<text x="155"  y="1437" text-anchor="middle" font-size="10" fill="#8b949e">Papers &#183; preferences</text>
+<text x="155"  y="1452" text-anchor="middle" font-size="10" fill="#8b949e">LangGraph checkpoints</text>
+<text x="155"  y="1467" text-anchor="middle" font-size="10" fill="#8b949e">User research library</text>
+<text x="155"  y="1484" text-anchor="middle" font-size="9"  fill="#d29922" font-style="italic">research.db</text>
+
+<!-- ChromaDB: cx=445 -->
+<rect x="335"  y="1390" width="220" height="106" rx="8" fill="#161b22" stroke="#58a6ff" stroke-width="1.5"/>
+<text x="445"  y="1418" text-anchor="middle" font-size="13" font-weight="700" fill="#58a6ff">ChromaDB</text>
+<text x="445"  y="1437" text-anchor="middle" font-size="10" fill="#8b949e">Chunk vector embeddings</text>
+<text x="445"  y="1452" text-anchor="middle" font-size="10" fill="#8b949e">Semantic retrieval for Q&amp;A</text>
+<text x="445"  y="1467" text-anchor="middle" font-size="10" fill="#8b949e">and summary generation</text>
+
+<!-- MCP Server: cx=800 -->
+<rect x="690"  y="1390" width="220" height="106" rx="8" fill="#161b22" stroke="#39c5cf" stroke-width="1.5"/>
+<text x="800"  y="1418" text-anchor="middle" font-size="13" font-weight="700" fill="#39c5cf">MCP Server</text>
+<text x="800"  y="1437" text-anchor="middle" font-size="10" fill="#8b949e">localhost:8001</text>
+<text x="800"  y="1452" text-anchor="middle" font-size="10" fill="#8b949e">All external I/O abstracted</text>
+<text x="800"  y="1467" text-anchor="middle" font-size="10" fill="#8b949e">arXiv &#183; PDF &#183; vectors &#183; DB</text>
+
+<!-- SqliteSaver: cx=1155 -->
+<rect x="1045" y="1390" width="220" height="106" rx="8" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+<text x="1155" y="1418" text-anchor="middle" font-size="13" font-weight="700" fill="#bc8cff">SqliteSaver</text>
+<text x="1155" y="1437" text-anchor="middle" font-size="10" fill="#8b949e">LangGraph checkpoint</text>
+<text x="1155" y="1452" text-anchor="middle" font-size="10" fill="#8b949e">Resume from interrupt</text>
+<text x="1155" y="1467" text-anchor="middle" font-size="10" fill="#8b949e">Thread-safe session state</text>
+
+<!-- PDF Store: cx=1445 -->
+<rect x="1335" y="1390" width="220" height="106" rx="8" fill="#161b22" stroke="#e3693c" stroke-width="1.5"/>
+<text x="1445" y="1418" text-anchor="middle" font-size="13" font-weight="700" fill="#e3693c">PDF Store</text>
+<text x="1445" y="1437" text-anchor="middle" font-size="10" fill="#8b949e">Downloaded papers</text>
+<text x="1445" y="1452" text-anchor="middle" font-size="10" fill="#8b949e">Local filesystem</text>
+<text x="1445" y="1467" text-anchor="middle" font-size="10" fill="#8b949e">Indexed text cache</text>
+
+<!-- ===================== LEGEND ===================== -->
+<line x1="40" y1="1514" x2="1560" y2="1514" stroke="#30363d" stroke-width="0.8"/>
+<text x="60"  y="1537" font-size="12" font-weight="700" fill="#e6edf3">Legend</text>
+
+<rect x="120"  y="1527" width="22" height="14" rx="3" fill="#3fb950"/>
+<text x="150"  y="1539" font-size="11" fill="#e6edf3">Discovery pipeline</text>
+<rect x="310"  y="1527" width="22" height="14" rx="3" fill="#bc8cff"/>
+<text x="340"  y="1539" font-size="11" fill="#e6edf3">Analysis pipeline</text>
+<rect x="490"  y="1527" width="22" height="14" rx="3" fill="#e87899"/>
+<text x="520"  y="1539" font-size="11" fill="#e6edf3">Q&amp;A pipeline</text>
+<rect x="660"  y="1527" width="22" height="14" rx="3" fill="#f0883e"/>
+<text x="690"  y="1539" font-size="11" fill="#e6edf3">Human-in-loop interrupt (diamond)</text>
+<rect x="940"  y="1527" width="22" height="14" rx="3" fill="#39c5cf"/>
+<text x="970"  y="1539" font-size="11" fill="#e6edf3">Entry / output / END nodes</text>
+<line x1="1190" y1="1534" x2="1216" y2="1534" stroke="#d29922" stroke-width="2" stroke-dasharray="5,3"/>
+<text x="1224" y="1539" font-size="11" fill="#e6edf3">Revision feedback loop</text>
+
+<!-- Row 2 -->
+<rect x="120"  y="1556" width="22" height="14" rx="3" fill="#f85149"/>
+<text x="150"  y="1568" font-size="11" fill="#e6edf3">Error / rejection path</text>
+<polygon points="330,1570 318,1556 342,1556" fill="#2d1e0f" stroke="#f0883e" stroke-width="1.5"/>
+<text x="352"  y="1568" font-size="11" fill="#e6edf3">Gate = pause &#8594; frontend resumes with user decision</text>
+
+<line x1="40"  y1="1590" x2="1560" y2="1590" stroke="#30363d" stroke-width="0.8"/>
+<text x="800"  y="1610" text-anchor="middle" font-size="11" fill="#8b949e">ResearchAtlas &#183; LangGraph &#183; OpenAI GPT-4o &#183; MCP Protocol &#183; arXiv API &#183; ChromaDB &#183; SQLite</text>
+</svg></body></html>
