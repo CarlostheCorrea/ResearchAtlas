@@ -228,18 +228,40 @@ QA_JUDGE_ENABLED=false
 
 1.  Open **http://localhost:8000**
 2.  Search for a topic — e.g. `"retrieval augmented generation"` — and choose a year and category filter
-3.  Papers are ranked by relevance. Click one to open it.
-4.  Click **Analyze Paper** → approve the download → watch the progress steps
-5.  Approve the 10-section summary to save it to your library
-6.  Switch to the **Ask a Question** tab and try:
+
+
+<img width="1512" height="823" alt="Screenshot 2026-04-13 at 9 26 22 AM" src="https://github.com/user-attachments/assets/0ce1e798-abcd-4f0f-bdfe-fe0dc3685ca0" />
+
+4.  Papers are ranked by relevance. Click one to open it.
+5.  Click **Analyze Paper** → approve the download → watch the progress steps
+
+<img width="1512" height="823" alt="Screenshot 2026-04-13 at 9 42 13 AM" src="https://github.com/user-attachments/assets/1f260bf0-6cd6-4bec-8106-753b061ed185" />
+
+
+7.  Approve the 10-section summary to save it to your library
+8.  Switch to the **Ask a Question** tab and try:
     -   `"What is the main contribution of this paper?"`
     -   `"Find me evidence for the main claim"`
     -   `"Make me an image of the data pipeline"`
     -   `"Give me a downloadable markdown summary"`
-7.  Watch the **Tools** side panel for the live MCP tool timeline
-8.  Switch to **Logs** to see the timestamped event stream
-9.  Switch to **Tracking** to see the LLM-as-judge scores for the answer
-10. Rate the paper in **My Library** — ratings shift future ranking weights
+
+<img width="1512" height="818" alt="Screenshot 2026-04-13 at 9 35 47 AM" src="https://github.com/user-attachments/assets/d426ba10-cf5e-4fe3-b567-e3b7f0872bdc" />
+
+9.  Watch the **Tools** side panel for the live MCP tool timeline
+11.  Switch to **Logs** to see the timestamped event stream
+12.  Switch to **Tracking** to see the LLM-as-judge scores for the answer
+
+<img width="1512" height="820" alt="Screenshot 2026-04-13 at 9 40 25 AM" src="https://github.com/user-attachments/assets/35711219-9d37-42c0-8124-81cffb2e936d" />
+
+
+14. Rate the paper in **My Library** — ratings shift future ranking weights
+
+<img width="1512" height="822" alt="Screenshot 2026-04-13 at 9 44 09 AM" src="https://github.com/user-attachments/assets/6035f9e7-5343-4e35-9c27-eb64e2c1d26d" />
+
+15. Find more about the authors with, author search
+<img width="1512" height="820" alt="Screenshot 2026-04-13 at 9 45 31 AM" src="https://github.com/user-attachments/assets/e20d19e0-f0f4-4239-97ab-dd6febf5b51d" />
+
+
 
 ------------------------------------------------------------------------
 
