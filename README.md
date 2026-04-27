@@ -12,8 +12,8 @@ ResearchAtlas is a local web app for exploring academic papers from arXiv. It is
 
 The app has two main AI paths:
 
-- **Analyze Paper** uses a LangGraph analysis pipeline. It downloads the selected PDF, extracts and indexes the text, generates multiple competing summary candidates, judges them, and shows the best 10-section summary for human approval before saving.
-- **Ask a Question** uses a standards-based MCP Q&A server. The FastAPI app acts as the MCP host, discovers available tools at runtime, calls tools such as evidence lookup, citation generation, Markdown/PDF export, image generation, and presentation creation, then evaluates the final answer with an LLM-as-judge.
+-   **Analyze Paper** uses a LangGraph analysis pipeline. It downloads the selected PDF, extracts and indexes the text, generates multiple competing summary candidates, judges them, and shows the best 10-section summary for human approval before saving.
+-   **Ask a Question** uses a standards-based MCP Q&A server. The FastAPI app acts as the MCP host, discovers available tools at runtime, calls tools such as evidence lookup, citation generation, Markdown/PDF export, image generation, and presentation creation, then evaluates the final answer with an LLM-as-judge.
 
 The goal is not only to summarize papers, but to make the research process visible. The UI shows tool calls, event logs, evaluation tracking, citations, generated assets, and saved-paper feedback so the user can see how each answer was produced and improve future ranking through ratings.
 
@@ -242,14 +242,12 @@ QA_JUDGE_ENABLED=false
 1.  Open **http://localhost:8000**
 2.  Search for a topic — e.g. `"retrieval augmented generation"` — and choose a year and category filter
 
-
-<img width="1512" height="823" alt="Screenshot 2026-04-13 at 9 26 22 AM" src="https://github.com/user-attachments/assets/0ce1e798-abcd-4f0f-bdfe-fe0dc3685ca0" />
+<img src="https://github.com/user-attachments/assets/0ce1e798-abcd-4f0f-bdfe-fe0dc3685ca0" alt="Screenshot 2026-04-13 at 9 26 22 AM" width="1512" height="823"/>
 
 4.  Papers are ranked by relevance. Click one to open it.
 5.  Click **Analyze Paper** → approve the download → watch the progress steps
 
-<img width="1512" height="823" alt="Screenshot 2026-04-13 at 9 42 13 AM" src="https://github.com/user-attachments/assets/1f260bf0-6cd6-4bec-8106-753b061ed185" />
-
+<img src="https://github.com/user-attachments/assets/1f260bf0-6cd6-4bec-8106-753b061ed185" alt="Screenshot 2026-04-13 at 9 42 13 AM" width="1512" height="823"/>
 
 7.  Approve the 10-section summary to save it to your library
 8.  Switch to the **Ask a Question** tab and try:
@@ -258,23 +256,19 @@ QA_JUDGE_ENABLED=false
     -   `"Make me an image of the data pipeline"`
     -   `"Give me a downloadable markdown summary"`
 
-<img width="1512" height="818" alt="Screenshot 2026-04-13 at 9 35 47 AM" src="https://github.com/user-attachments/assets/d426ba10-cf5e-4fe3-b567-e3b7f0872bdc" />
+<img src="https://github.com/user-attachments/assets/d426ba10-cf5e-4fe3-b567-e3b7f0872bdc" alt="Screenshot 2026-04-13 at 9 35 47 AM" width="1512" height="818"/>
 
 9.  Watch the **Tools** side panel for the live MCP tool timeline
-11.  Switch to **Logs** to see the timestamped event stream
-12.  Switch to **Tracking** to see the LLM-as-judge scores for the answer
+10. Switch to **Logs** to see the timestamped event stream
+11. Switch to **Tracking** to see the LLM-as-judge scores for the answer
 
-<img width="1512" height="820" alt="Screenshot 2026-04-13 at 9 40 25 AM" src="https://github.com/user-attachments/assets/35711219-9d37-42c0-8124-81cffb2e936d" />
-
+<img src="https://github.com/user-attachments/assets/35711219-9d37-42c0-8124-81cffb2e936d" alt="Screenshot 2026-04-13 at 9 40 25 AM" width="1512" height="820"/>
 
 14. Rate the paper in **My Library** — ratings shift future ranking weights
 
-<img width="1512" height="822" alt="Screenshot 2026-04-13 at 9 44 09 AM" src="https://github.com/user-attachments/assets/6035f9e7-5343-4e35-9c27-eb64e2c1d26d" />
+<img src="https://github.com/user-attachments/assets/6035f9e7-5343-4e35-9c27-eb64e2c1d26d" alt="Screenshot 2026-04-13 at 9 44 09 AM" width="1512" height="822"/>
 
-15. Find more about the authors with, author search
-<img width="1512" height="820" alt="Screenshot 2026-04-13 at 9 45 31 AM" src="https://github.com/user-attachments/assets/e20d19e0-f0f4-4239-97ab-dd6febf5b51d" />
-
-
+15. Find more about the authors with, author search <img src="https://github.com/user-attachments/assets/e20d19e0-f0f4-4239-97ab-dd6febf5b51d" alt="Screenshot 2026-04-13 at 9 45 31 AM" width="1512" height="820"/>
 
 ------------------------------------------------------------------------
 
@@ -420,7 +414,7 @@ Return to frontend: answer + citations + assets + tracking scores
 See `.env.example` for the full list. Most important:
 
 | Variable | Default | Description |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | `OPENAI_API_KEY` | *(required)* | Your OpenAI key |
 | `OPENAI_MODEL` | `gpt-4o` | Model for planning, synthesis, and judge |
 | `OPENAI_IMAGE_MODEL` | `gpt-image-1` | Model for image generation |
@@ -438,7 +432,7 @@ python -m pytest tests/ -v
 ```
 
 | Test file | What it covers |
-|------------------------------------|------------------------------------|
+|----|----|
 | `tests/test_qa_mcp.py` | Q&A MCP server tools, stdio integration, asset exports |
 | `tests/test_graph.py` | LangGraph analysis workflow |
 | `tests/test_rag.py` | Chunking, cleaning, retrieval helpers |
